@@ -32,7 +32,7 @@ import com.crossberry.noxs.databinding.ActivityEditorBinding
 import com.crossberry.noxs.runtime.NoxsEditorFilesystem
 import com.crossberry.noxs.runtime.NoxsPaths
 import com.crossberry.noxs.runtime.NoxsService
-import com.crossberry.noxs.runtime.NoxsConstants
+import com.crossberry.noxs.shared.NoxsConstants
 import com.crossberry.noxs.runtime.RuntimeHolder
 import io.github.rosemoe.sora.lang.EmptyLanguage
 import io.github.rosemoe.sora.lang.Language
@@ -495,12 +495,12 @@ class EditorActivity : AppCompatActivity() {
             val label = android.widget.TextView(this)
             label.text = if (tab.dirty) tab.title + " ●" else tab.title
             label.setTextColor(getColor(R.color.noxs_text))
-            label.setTextSize(13f, android.util.TypedValue.COMPLEX_UNIT_SP)
+            label.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f)
             chip.addView(label)
             val close = android.widget.TextView(this)
             close.text = " ✕"
             close.setTextColor(getColor(R.color.noxs_text_dim))
-            close.setTextSize(13f, android.util.TypedValue.COMPLEX_UNIT_SP)
+            close.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f)
             close.setOnClickListener { closeTabsFor(tab.guestPath, force = false) }
             chip.addView(close)
             chip.setOnClickListener { if (index != activeIndex) setActiveTab(index) }

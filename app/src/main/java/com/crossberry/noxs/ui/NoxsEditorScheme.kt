@@ -35,9 +35,6 @@ class NoxsEditorScheme : EditorColorScheme() {
         setColor(COMPLETION_WND_TEXT_SECONDARY, 0xFF9A9A9A.toInt())
         setColor(SCROLL_BAR_THUMB, 0xFF3A3A3A.toInt())
         setColor(SCROLL_BAR_THUMB_PRESSED, 0xFF20D866.toInt())
-        // Unused by the TextMate path but kept dark so nothing flashes white.
-        setColor(BACKGROUND_COLOR_DARK, 0xFF111111.toInt())
-        setColor(BACKGROUND_COLOR_LIGHT, 0xFF111111.toInt())
         setColor(STICKY_SCROLL_DIVIDER, 0xFF303030.toInt())
     }
 }

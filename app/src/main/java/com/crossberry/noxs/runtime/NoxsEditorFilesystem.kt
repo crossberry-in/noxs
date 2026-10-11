@@ -238,7 +238,7 @@ class NoxsEditorFilesystem(private val rootfs: File) {
                 // NIO walk WITHOUT following links: an outbound symlink inside
                 // the tree is deleted as a link and its target is untouched
                 // (File.deleteRecursively would descend through listFiles()).
-                Files.walk(file.toPath(), Integer.MAX_VALUE, java.nio.file.FileVisitOption.NONE)
+                Files.walk(file.toPath(), Integer.MAX_VALUE)
                     .use { stream ->
                         stream.sorted(java.util.Comparator.reverseOrder())
                             .allMatch { Files.deleteIfExists(it) }
