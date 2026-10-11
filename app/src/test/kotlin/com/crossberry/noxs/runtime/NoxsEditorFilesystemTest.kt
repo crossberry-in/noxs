@@ -147,7 +147,27 @@ class NoxsEditorFilesystemTest {
         val loaded = fs.read("/home/noxs/app.py")
         // A terminal command rewrote the file behind the editor's back:
         f.writeText("rewritten by terminal\n")
-        fs.write("/home/noxs/app.py", "editor content\n", expectedLastModifiedMs = loaded.lastModifiedMs)
+        fs.write(
+            "/home/noxs/app.py", "editor content\n",
+            expectedLastModifiedMs = loaded.lastModifiedMs,
+            expectedSizeBytes = loaded.sizeBytes
+        )
+    }
+
+    @Test(expected = NoxsEditorFilesystem.FilesystemException::class)
+    fun `external modification is caught even in the same mtime tick`() {
+        setupRootfs()
+        val f = File(rootfs, "home/noxs/app.py")
+        f.writeText("original\n")
+        val loaded = fs.read("/home/noxs/app.py")
+        // Same-tick rewrite with a different length: coarse (1s) mtime
+        // granularity must not hide this — the size guard catches it.
+        f.writeText("rewritten immediately\n")
+        fs.write(
+            "/home/noxs/app.py", "editor content\n",
+            expectedLastModifiedMs = loaded.lastModifiedMs,
+            expectedSizeBytes = loaded.sizeBytes
+        )
     }
 
     @Test

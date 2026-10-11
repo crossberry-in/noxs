@@ -523,7 +523,9 @@ class EditorActivity : AppCompatActivity() {
             runCatching {
                 fs.write(
                     tab.guestPath, tab.buffer,
-                    expectedLastModifiedMs = tab.savedLastModified, force = false
+                    expectedLastModifiedMs = tab.savedLastModified,
+                    expectedSizeBytes = tab.savedSize,
+                    force = false
                 )
                 val host = fs.validateGuestPath(tab.guestPath)
                 tab.savedLastModified = host.lastModified()

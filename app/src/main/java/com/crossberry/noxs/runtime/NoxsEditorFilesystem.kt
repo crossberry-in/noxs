@@ -154,13 +154,16 @@ class NoxsEditorFilesystem(private val rootfs: File) {
      * non-null, the on-disk file must still carry that timestamp (and size),
      * otherwise another process (a terminal command) changed it since it was
      * opened — the caller decides whether to overwrite after warning.
-     * Pass `force = true` to skip the external-change guard (explicit user
-     * confirmation is expected to have happened in the UI).
+     * Size is checked alongside mtime: filesystems with coarse (1s) mtime
+     * granularity would otherwise miss same-tick rewrites of different
+     * length. Pass `force = true` to skip the external-change guard
+     * (explicit user confirmation is expected to have happened in the UI).
      */
     fun write(
         guestPath: String,
         text: String,
         expectedLastModifiedMs: Long? = null,
+        expectedSizeBytes: Long? = null,
         force: Boolean = false
     ) {
         val file = validateGuestPath(guestPath)
@@ -168,8 +171,8 @@ class NoxsEditorFilesystem(private val rootfs: File) {
             throw FilesystemException("Not a regular file: $guestPath")
         }
         if (expectedLastModifiedMs != null && !force && file.exists()) {
-            val current = file.lastModified()
-            if (current != expectedLastModifiedMs) {
+            val sizeChanged = expectedSizeBytes != null && file.length() != expectedSizeBytes
+            if (file.lastModified() != expectedLastModifiedMs || sizeChanged) {
                 throw FilesystemException(
                     "File changed on disk since it was opened — reload or force-save to overwrite"
                 )
