@@ -26,6 +26,13 @@ class TerminalEmulator(
         fun onResize(cols: Int, rows: Int)
         /** Responses (CPR/DA/DCS replies) that must go to the child process. */
         fun onReply(data: ByteArray)
+
+        /**
+         * OSC 7: the shell reported its current working directory
+         * (Noxs shell integration emits it on every prompt). Default no-op
+         * so existing clients keep compiling.
+         */
+        fun onWorkingDirectoryChanged(dir: String) {}
     }
 
     val buffer = TerminalBuffer(cols, rows, scrollbackLines)
@@ -59,6 +66,16 @@ class TerminalEmulator(
     var promptActive: Boolean = false
         private set
 
+    /**
+     * Absolute guest path of the shell's working directory as last reported
+     * by the shell itself via OSC 7 (Noxs shell integration), or null when
+     * the shell has not reported one yet. Powers the NXEditor workspace
+     * detection and Activity Center records.
+     */
+    @Volatile
+    var currentWorkingDirectory: String? = null
+        private set
+
     private var activeHyperlink: String? = null
 
     // Track wide-char continuation cell
@@ -72,6 +89,7 @@ class TerminalEmulator(
     companion object {
         const val NoxsScrollbackDefault = 10000
         private const val BEL = 0x07
+        private const val MAX_OSC7_LENGTH = 1024
         private const val BS = 0x08
         private const val HT = 0x09
         private const val LF = 0x0a
@@ -639,9 +657,100 @@ class TerminalEmulator(
                     "B", "C", "D" -> promptActive = false
                 }
             }
+            7 -> {
+                val payload = text.substringAfter(';', "")
+                parseOsc7Path(payload)?.let { dir ->
+                    if (dir != currentWorkingDirectory) {
+                        currentWorkingDirectory = dir
+                        client.onWorkingDirectoryChanged(dir)
+                    }
+                }
+            }
             else -> {}
         }
     }
+
+    /**
+     * Parses an OSC 7 payload into an absolute path. Accepts the forms the
+     * Noxs shell integration and common shells emit:
+     *   /abs/path                     (bare path — allowed extension)
+     *   file:///abs/path              (empty authority)
+     *   file://host/abs/path          (authority stripped)
+     * Percent escapes are decoded as UTF-8 bytes; malformed sequences stay
+     * literal. Returns null for anything that is not a plausible absolute
+     * directory path (relative paths, control characters, oversized payloads).
+     */
+    internal fun parseOsc7Path(payload: String): String? {
+        if (payload.isEmpty() || payload.length > MAX_OSC7_LENGTH) return null
+        val path: String = when {
+            payload.startsWith("file://") -> {
+                val rest = payload.substring(7)
+                val slash = rest.indexOf('/')
+                if (slash < 0) return null
+                rest.substring(slash)
+            }
+            payload.startsWith("file:") -> {
+                // file:/abs or file:///abs both land on the last slash run
+                val rest = payload.substring(5)
+                val slash = rest.indexOf('/')
+                if (slash < 0) return null
+                rest.substring(slash)
+            }
+            payload.startsWith("/") -> payload
+            else -> return null
+        }
+        if (path.length < 1) return null
+        val decoded = decodePercentUtf8(path)
+        if (!decoded.startsWith("/")) return null
+        // Control characters (except none at all) would corrupt downstream UIs.
+        if (decoded.any { it < ' ' || it == '\u007f' }) return null
+        return decoded
+    }
+
+    private fun decodePercentUtf8(s: String): String {
+        if ('%' !in s) return s
+        val out = java.io.ByteArrayOutputStream(s.length)
+        val hex = StringBuilder(2)
+        var i = 0
+        // First pass: expand %XX escapes into raw bytes (others pass through).
+        val raw = ByteArray(s.length + s.length / 3 + 8)
+        var n = 0
+        while (i < s.length) {
+            val c = s[i]
+            if (c == '%' && i + 2 < s.length) {
+                hex.setLength(0)
+                var j = i + 1
+                while (j < s.length && hex.length < 2 && s[j].isHexDigit()) {
+                    hex.append(s[j]); j++
+                }
+                if (hex.length == 2) {
+                    raw[n++] = hex.toString().toInt(16).toByte()
+                    i = j
+                    continue
+                }
+            }
+            // Literal byte (UTF-8 multibyte sequences pass through as chars)
+            val b = c.code
+            when {
+                b < 0x80 -> raw[n++] = b.toByte()
+                b < 0x800 -> {
+                    raw[n++] = (0xC0 or (b shr 6)).toByte()
+                    raw[n++] = (0x80 or (b and 0x3F)).toByte()
+                }
+                else -> {
+                    raw[n++] = (0xE0 or (b shr 12)).toByte()
+                    raw[n++] = (0x80 or ((b shr 6) and 0x3F)).toByte()
+                    raw[n++] = (0x80 or (b and 0x3F)).toByte()
+                }
+            }
+            i++
+        }
+        out.write(raw, 0, n)
+        return out.toString("UTF-8")
+    }
+
+    private fun Char.isHexDigit(): Boolean =
+        this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
 
     // -------------------------------------------------------------- paste in
 

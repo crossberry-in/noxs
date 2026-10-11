@@ -266,6 +266,43 @@ object RootfsConfigurator {
                 NoxsLog.w("RootfsConfig", "migration could not delete stale lib $name")
             }
         }
+        refreshShellIntegration(paths)
+    }
+
+    /**
+     * Migration helper: rewrites /etc/profile.d/noxs.sh wholesale and replaces
+     * the appended "Noxs interactive shell setup" block (marker to EOF) in the
+     * bashrc files with the current snippet, so environments installed by
+     * earlier Noxs versions gain updated shell integration (currently OSC 7
+     * working-directory reporting) without a reinstall. Content above the
+     * marker — user edits and distro defaults — is kept intact.
+     */
+    private fun refreshShellIntegration(paths: NoxsPaths) {
+        runCatching {
+            val rootfs = paths.rootfs
+            writeFile(File(rootfs, "etc/profile.d/noxs.sh"), noxsProfile("android"))
+            File(rootfs, "etc/profile.d/noxs.sh").setExecutable(false)
+            val marker = "# --- Noxs interactive shell setup ---"
+            val snippet = bashrcSnippet("android", "Noxs Debian 12 (bookworm)", "sudo apt update")
+            listOf(
+                File(rootfs, "etc/bash.bashrc"),
+                File(rootfs, "home/noxs/.bashrc"),
+                File(rootfs, "root/.bashrc")
+            ).forEach { rc ->
+                if (!rc.isFile) return@forEach
+                val existing = rc.readText()
+                val idx = existing.indexOf(marker)
+                val updated = if (idx >= 0) {
+                    val kept = existing.substring(0, idx).trimEnd()
+                    if (kept.isEmpty()) snippet + "\n" else kept + "\n\n" + snippet + "\n"
+                } else {
+                    existing.trimEnd() + "\n\n" + snippet + "\n"
+                }
+                writeFile(rc, updated)
+            }
+        }.onFailure {
+            NoxsLog.w("RootfsConfig", "shell integration refresh failed: ${it.message}")
+        }
     }
 
     // 5: added env-lib.sh (nx env Multi-Env Manager CLI) — REMOVED in 9
@@ -281,8 +318,12 @@ object RootfsConfigurator {
     //    without ca-certificates; dpkg recovery runs before the install;
     //    a missing noxs.sources is self-healed; the terminal output uses a
     //    scrollback-safe transcript instead of cursor-redrawn live boxes.
+    // 11: shell integration emits OSC 7 on every prompt (PROMPT_COMMAND in
+    //    both profile.d/noxs.sh and the bashrc snippets) so the app tracks
+    //    the shell working directory for the NXEditor workspace detection;
+    //    migration rewrites profile.d/noxs.sh and replaces the bashrc blocks.
     // internal: asserted from unit tests (NoxsNxAiTest migration marker check)
-    internal val NX_PACKAGE_SYSTEM_VERSION = "10"
+    internal val NX_PACKAGE_SYSTEM_VERSION = "11"
 
     /** Guest lib files removed by a migration version — deleted on update. */
     private val RETIRED_LIB_FILES = listOf("env-lib.sh")
@@ -667,7 +708,9 @@ object RootfsConfigurator {
         export PATH="/usr/local/bin:${'$'}PATH"
         export PS1='noxs@$hostLabel:\w\$ '
         export PS0=${'$'}'\033]133;C\a'
-        PROMPT_COMMAND='printf "\033]133;A\007"'
+        # OSC 133 marks the prompt; OSC 7 reports the working directory so the
+        # app (NXEditor workspace, Activity Center) tracks it without polling.
+        PROMPT_COMMAND='printf "\033]133;A\007\033]7;file://%s\007" "${'$'}{PWD// /%20}"'
         # recreate FHS links once (app storage cannot create symlinks directly)
         if [ -x /usr/local/lib/noxs-links.sh ]; then
             /usr/local/lib/noxs-links.sh >/dev/null 2>&1 || true
@@ -696,8 +739,9 @@ object RootfsConfigurator {
         fi
         # OSC 133 marks Bash's editable prompt; the terminal asks readline to
         # redisplay after background output arrives during command editing.
+        # OSC 7 reports the working directory for the Noxs app (NXEditor).
         export PS0=${'$'}'\033]133;C\a'
-        PROMPT_COMMAND='printf "\033]133;A\007"'
+        PROMPT_COMMAND='printf "\033]133;A\007\033]7;file://%s\007" "${'$'}{PWD// /%20}"'
         if [ -z "${'$'}{NOXS_BANNER_SHOWN:-}" ] && [ -t 1 ]; then
             export NOXS_BANNER_SHOWN=1
             printf '\033[1;32m$banner\033[0m — %s (%s)\n' "${'$'}(uname -sr 2>/dev/null || echo Linux)" "${'$'}(uname -m 2>/dev/null || echo arm64)"

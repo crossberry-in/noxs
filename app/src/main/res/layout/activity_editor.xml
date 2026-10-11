@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NXEditor: native code editor over the active Noxs Linux environment.
+     Chrome mirrors the manager screens (black + panel + accent); the editing
+     surface is the sora-editor CodeEditor (the engine Squircle CE embeds). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/noxs_background">
+
+    <!-- Header: back + workspace path + Open in Terminal -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="6dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_back"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:minWidth="0dp"
+            android:text="@string/action_back" />
+
+        <TextView
+            android:id="@+id/workspace_path"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:ellipsize="start"
+            android:singleLine="true"
+            android:textColor="@color/noxs_text"
+            android:textSize="14sp"
+            android:fontFamily="monospace" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_open_terminal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:text="@string/editor_open_terminal" />
+    </LinearLayout>
+
+    <!-- Toolbar: explorer toggle, create, refresh, save -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_toggle_explorer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:minWidth="0dp"
+            android:text="@string/editor_files" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_new_file"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:minWidth="0dp"
+            android:text="@string/editor_new_file" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_new_folder"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:minWidth="0dp"
+            android:text="@string/editor_new_folder" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_refresh"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:minWidth="0dp"
+            android:text="@string/action_refresh" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_save"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:minWidth="0dp"
+            android:text="@string/editor_save" />
+    </LinearLayout>
+
+    <!-- Open editor tabs -->
+    <HorizontalScrollView
+        android:id="@+id/editor_tabs_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/editor_tabs_row"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp" />
+    </HorizontalScrollView>
+
+    <!-- File explorer (starts at the active terminal working directory) -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/explorer_list"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/editor_explorer_height"
+        android:background="@color/noxs_panel"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/editor_error"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="10dp"
+        android:textColor="@color/noxs_error"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <!-- Editing surface -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <io.github.rosemoe.sora.widget.CodeEditor
+            android:id="@+id/editor_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/editor_empty"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:padding="24dp"
+            android:text="@string/editor_empty_hint"
+            android:textColor="@color/noxs_text_dim"
+            android:textSize="14sp" />
+    </FrameLayout>
+
+    <!-- Status: dirty state + active path -->
+    <TextView
+        android:id="@+id/editor_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/noxs_panel"
+        android:ellipsize="start"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:singleLine="true"
+        android:textColor="@color/noxs_text_dim"
+        android:textSize="12sp"
+        android:fontFamily="monospace" />
+</LinearLayout>

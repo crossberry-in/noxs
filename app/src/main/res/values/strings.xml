@@ -194,6 +194,7 @@
     <!-- About -->
     <string name="title_about">About Noxs</string>
     <string name="about_body">Noxs by CrossberryWeb.\n\nFor help, feedback, or support:\nWebsite: https://crossberry.vercel.app\nEmail: crossberryweb@gmail.com</string>
+    <string name="about_licenses">Open-source software:\n\u2022 Code editor engine: sora-editor (LGPL-2.1) \u2014 io.github.rosemoe:editor\n\u2022 Bundled TextMate grammars and Darcula theme: Squircle CE contributors (Apache-2.0) \u2014 github.com/massivemadness/Squircle-CE</string>
     <string name="about_version">Version %1$s</string>
 
     <!-- Notifications -->
@@ -566,3 +567,35 @@
     <string name="settings_bell_desc">Play a sound on terminal events</string>
 
 </resources>
+    <!-- NXEditor (native code editor) -->
+    <string name="title_editor">NXEditor</string>
+    <string name="nav_editor">Editor</string>
+    <string name="action_back">‹</string>
+    <string name="action_save">Save</string>
+    <string name="editor_open_terminal">Open in Terminal</string>
+    <string name="editor_files">Files</string>
+    <string name="editor_new_file">+ File</string>
+    <string name="editor_new_folder">+ Folder</string>
+    <string name="editor_save">Save</string>
+    <string name="editor_empty_hint">No file open.\n\nTap Files to browse the current working directory\nof your Noxs terminal session.</string>
+    <string name="editor_status_saved">Saved</string>
+    <string name="editor_status_dirty">● Unsaved changes</string>
+    <string name="editor_status_no_file">No file open</string>
+    <string name="editor_file_changed_on_disk">File changed on disk — Save overwrites it, Reload discards your edits.</string>
+    <string name="editor_action_reload">Reload</string>
+    <string name="editor_new_name_hint">Name (relative to the current folder)</string>
+    <string name="editor_open_terminal_missing">Workspace folder is missing — refresh the file list.</string>
+    <string name="editor_open_terminal_failed">Could not create a terminal session here: %1$s</string>
+    <string name="editor_session_created">Terminal opened at %1$s</string>
+    <string name="editor_discard_changes_title">Unsaved changes</string>
+    <string name="editor_discard_changes_msg">Some open files have unsaved changes. Save them before leaving the editor?</string>
+    <string name="editor_discard">Discard</string>
+    <string name="editor_save_all">Save all</string>
+    <string name="editor_saved_all">All changes saved</string>
+    <string name="editor_save_failed">Save failed: %1$s</string>
+    <string name="editor_loaded_too_many">Too many open files</string>
+    <string name="editor_deleted">Deleted %1$s</string>
+    <string name="editor_created">Created %1$s</string>
+    <string name="editor_renamed">Renamed to %1$s</string>
+    <string name="editor_invalid_name">Names cannot be empty, contain \"/\", or start with \".\"</string>
+    <string name="editor_workspace_missing">Workspace folder not found — opening /home/noxs</string>

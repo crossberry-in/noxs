@@ -46,7 +46,8 @@ class NoxsSessionManager(
     fun createSession(
         label: String,
         loginAsRoot: Boolean = false,
-        showFirstRunWelcome: Boolean = false
+        showFirstRunWelcome: Boolean = false,
+        cwd: String? = null
     ): Result<Entry> {
         if (_sessions.value.size >= quota.maxSessions) {
             return Result.failure(IllegalStateException("Session quota reached (${quota.maxSessions})"))
@@ -76,7 +77,9 @@ class NoxsSessionManager(
         val sessionEnvironment = mutableMapOf("NOXS_SESSION_LABEL" to name)
         if (loginAsRoot) sessionEnvironment["NOXS_ROOT_LOGIN"] = "1"
         val env = launcher.buildEnv(sessionEnvironment)
-        val workDir = if (loginAsRoot) NoxsConstants.DEFAULT_ROOT_HOME else NoxsConstants.DEFAULT_USER_HOME
+        // NXEditor "Open in Terminal": validated guest working directory,
+        // falling back to the standard home when missing or invalid.
+        val workDir = resolveCwd(cwd, loginAsRoot)
         val argv = launcher.buildArgv(ProotLauncher.Options(loginAsRoot = loginAsRoot, workDir = workDir))
 
         session.start(argv.toTypedArray(), env, paths.tmp.absolutePath, preferPty = true)
@@ -100,6 +103,23 @@ class NoxsSessionManager(
         NoxsLog.i("Sessions", "created '$name' pid=${session.pid} pty=${session.isPty}")
         updateNotification()
         return Result.success(entry)
+    }
+
+    /**
+     * Validates a requested working directory against the guest rootfs and
+     * falls back to the standard home when it is missing, invalid, or not a
+     * directory — a session never fails to start because of a stale cwd.
+     */
+    private fun resolveCwd(cwd: String?, loginAsRoot: Boolean): String {
+        val fallback = if (loginAsRoot) NoxsConstants.DEFAULT_ROOT_HOME else NoxsConstants.DEFAULT_USER_HOME
+        if (cwd.isNullOrBlank() || cwd == fallback) return fallback
+        return try {
+            val fs = NoxsEditorFilesystem(paths.rootfs)
+            val dir = fs.validateGuestPath(cwd)
+            if (dir.isDirectory) fs.guestPathOf(dir) else fallback
+        } catch (_: Exception) {
+            fallback
+        }
     }
 
     private fun firstRunWelcome(): String = buildString {

@@ -111,6 +111,12 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
+    // NXEditor — the same editing engine Squircle CE embeds (pinned to
+    // Squircle's version): sora-editor core + TextMate grammar highlighting.
+    // engine: LGPL-2.1 · bundled grammar/theme assets: Squircle CE, Apache-2.0.
+    implementation("io.github.rosemoe:editor:0.24.3")
+    implementation("io.github.rosemoe:language-textmate:0.24.3")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

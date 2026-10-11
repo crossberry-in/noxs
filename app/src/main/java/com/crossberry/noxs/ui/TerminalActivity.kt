@@ -171,6 +171,7 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
         // Drawer: managers
         val routes = mapOf(
             binding.navFiles to FileBrowserActivity::class.java,
+            binding.navEditor to EditorActivity::class.java,
             binding.navPlugins to PluginStoreActivity::class.java,
             binding.navPackages to PackageManagerActivity::class.java,
             binding.navUsers to UserManagerActivity::class.java,
@@ -254,6 +255,32 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
             }
             showFloatingPanel(activityId)
         }
+        // NXEditor "Open in Terminal": a NEW session at the editor workspace;
+        // existing sessions are untouched (singleTop routes repeats here).
+        intent?.getStringExtra(EXTRA_NEW_SESSION_CWD)?.let { cwd ->
+            newSessionAt(cwd)
+        }
+    }
+
+    /**
+     * Creates a fresh user shell whose proot -w starts at [cwd] (validated by
+     * NoxsSessionManager) and attaches it. Never closes other sessions.
+     */
+    private fun newSessionAt(cwd: String) {
+        val mgr = sessionManager ?: RuntimeHolder.sessions ?: run {
+            Toast.makeText(this, R.string.err_generic, Toast.LENGTH_SHORT).show()
+            return
+        }
+        sessionManager = mgr
+        mgr.createSession("editor", loginAsRoot = false, showFirstRunWelcome = false, cwd = cwd)
+            .onSuccess { entry ->
+                current = entry
+                attachCurrent()
+                binding.drawer.closeDrawer(GravityCompat.START)
+            }
+            .onFailure {
+                Toast.makeText(this, it.message ?: getString(R.string.err_generic), Toast.LENGTH_LONG).show()
+            }
     }
 
     private var autoCreatePending = false
@@ -1215,7 +1242,7 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
         }
     }
 
-    private companion object {
+    internal companion object {
         const val STATE_STORAGE_REQUEST_ID = "storage_request_id"
         const val STATE_STORAGE_CATEGORY = "storage_category"
         const val PREFS_SETTINGS = "noxs_settings"
@@ -1224,6 +1251,14 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
         const val WEBSITE_URL = "https://crossberry.vercel.app"
         const val SUPPORT_EMAIL = "mailto:crossberryweb@gmail.com"
         const val SHUTDOWN_GRACE_MS = 3_000L
+
+        /** NXEditor → TerminalActivity: open a NEW session at this guest cwd. */
+        const val EXTRA_NEW_SESSION_CWD = "noxs.extra.NEW_SESSION_CWD"
+
+        /** Terminal tab the NXEditor workspace can jump to (validated cwd). */
+        fun openAt(context: Context, cwd: String): Intent =
+            Intent(context, TerminalActivity::class.java)
+                .putExtra(EXTRA_NEW_SESSION_CWD, cwd)
 
         // Noxs design-system colors (mirror res/values/colors.xml).
         private val ACCENT = 0xFF20D866.toInt()

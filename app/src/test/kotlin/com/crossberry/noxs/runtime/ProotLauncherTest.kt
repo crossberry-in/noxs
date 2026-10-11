@@ -47,6 +47,26 @@ class ProotLauncherTest {
         assertTrue(argv.contains("/root"))
     }
 
+    @Test fun `custom work dir flows into proot -w for editor sessions`() {
+        val (launcher, _) = makeLauncher()
+        val argv = launcher.buildArgv(
+            ProotLauncher.Options(loginAsRoot = false, workDir = "/home/noxs/projects/demo")
+        )
+        val wIdx = argv.indexOf("-w")
+        assertTrue("proot must receive -w", wIdx >= 0)
+        assertEquals("/home/noxs/projects/demo", argv[wIdx + 1])
+        // the shell still drops to the noxs user
+        assertTrue(argv.contains("/bin/su"))
+    }
+
+    @Test fun `null work dir falls back to the user home`() {
+        val (launcher, _) = makeLauncher()
+        val argv = launcher.buildArgv(ProotLauncher.Options(loginAsRoot = false))
+        val wIdx = argv.indexOf("-w")
+        assertTrue(wIdx >= 0)
+        assertEquals("/home/noxs", argv[wIdx + 1])
+    }
+
     @Test fun `one-shot wraps command for user context`() {
         val (launcher, _) = makeLauncher()
         val argv = launcher.oneShotArgv(listOf("dpkg-query", "-W"), asRoot = false)

@@ -61,6 +61,12 @@
             android:label="@string/title_file_browser" />
 
         <activity
+            android:name=".ui.EditorActivity"
+            android:exported="false"
+            android:label="@string/title_editor"
+            android:configChanges="orientation|screenSize|keyboardHidden|keyboard" />
+
+        <activity
             android:name=".ui.PackageManagerActivity"
             android:exported="false"
             android:label="@string/title_package_manager" />

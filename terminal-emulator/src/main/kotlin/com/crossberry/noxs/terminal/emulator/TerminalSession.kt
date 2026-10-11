@@ -54,6 +54,12 @@ interface TerminalSessionClient {
     fun onTitleChanged(session: TerminalSession)
     fun onBell(session: TerminalSession)
     fun onSessionFinished(session: TerminalSession)
+
+    /**
+     * OSC 7: the shell reported its working directory. Default no-op so
+     * existing implementors keep compiling; the app layer overrides it.
+     */
+    fun onWorkingDirectoryChanged(session: TerminalSession, dir: String) {}
 }
 
 class TerminalSession(
@@ -277,6 +283,10 @@ class TerminalSession(
 
     override fun onTitleChanged(title: String) {
         dispatch { client.onTitleChanged(this@TerminalSession) }
+    }
+
+    override fun onWorkingDirectoryChanged(dir: String) {
+        dispatch { client.onWorkingDirectoryChanged(this@TerminalSession, dir) }
     }
 
     override fun onBell() {

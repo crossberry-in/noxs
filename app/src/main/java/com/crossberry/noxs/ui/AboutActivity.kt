@@ -32,6 +32,7 @@ class AboutActivity : AppCompatActivity() {
         binding.recycler.visibility = View.GONE
 
         binding.screenEmpty.visibility = View.VISIBLE
-        binding.screenEmpty.text = getString(R.string.about_version, BuildConfig.VERSION_NAME)
+        binding.screenEmpty.text = getString(R.string.about_version, BuildConfig.VERSION_NAME) + "\n\n" +
+            getString(R.string.about_licenses)
     }
 }

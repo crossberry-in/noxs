@@ -506,6 +506,12 @@
                     <TextView style="@style/Text.Noxs.NavLabel" android:text="@string/nav_files" />
                 </LinearLayout>
                 <LinearLayout
+                    android:id="@+id/nav_editor"
+                    style="@style/Text.Noxs.NavRow">
+                    <ImageView style="@style/Text.Noxs.NavIcon" android:src="@drawable/ic_nav_editor" android:contentDescription="@string/nav_editor" />
+                    <TextView style="@style/Text.Noxs.NavLabel" android:text="@string/nav_editor" />
+                </LinearLayout>
+                <LinearLayout
                     android:id="@+id/nav_plugins"
                     style="@style/Text.Noxs.NavRow">
                     <ImageView style="@style/Text.Noxs.NavIcon" android:src="@drawable/ic_nav_plugins" android:contentDescription="@string/nav_plugins" />

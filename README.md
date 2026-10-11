@@ -124,6 +124,37 @@ search, a compact toolbar and a complete Settings → Terminal surface
 (Appearance / Interaction / Scrolling / Behavior / Advanced). All settings
 apply live — no shell restart. Details: [docs/TERMINAL-UX.md](docs/TERMINAL-UX.md).
 
+## NXEditor — code editor
+
+NXEditor is a built-in native code editor (sidebar → **Editor**) powered by
+the same engine Squircle CE embeds: [sora-editor](https://github.com/Rosemoe/sora-editor)
+(`io.github.rosemoe:editor`, pinned to Squircle's `0.24.3`) with TextMate
+syntax highlighting for 24 languages (Python, JavaScript/TypeScript, Kotlin,
+Java, C/C++, Go, Rust, Shell, YAML, Markdown, HTML/CSS and more).
+
+- **Workspace = your terminal.** The editor opens at the active terminal
+  session's working directory, tracked live via OSC 7 shell integration
+  (package system v11 refreshes the shell profile of existing environments
+  automatically). `Editor` in the sidebar opens the current directory —
+  no fixed paths anywhere.
+- **Real filesystem.** Read, save (with fsync), create, rename and delete
+  files and folders directly in the Debian rootfs; saved files are visible to
+  terminal commands immediately. All paths are validated and
+  canonicalized natively (no shell concatenation, no traversal, symlink
+  escapes rejected); outbound symlinks are never followed by deletes.
+- **Tabs + safety.** Up to 12 open files with unsaved-change markers, an
+  unsaved-changes guard on back navigation, external-change detection
+  (mtime/size) with reload/overwrite choice, and a 2 MB per-file editor cap.
+- **Open in Terminal.** One tap creates a NEW terminal session with `proot -w`
+  at the current workspace — existing sessions are never disturbed.
+- **Why native:** sora-editor is a native Android View and cannot render
+  inside the WebView-based Plugin Window, so NXEditor ships as a built-in
+  screen in the existing navigation (documented architectural decision).
+
+Attribution: grammar/theme assets are curated from
+[Squircle CE](https://github.com/massivemadness/Squircle-CE) (Apache-2.0);
+the sora-editor engine is LGPL-2.1. Both are credited in Settings → About.
+
 ## Security posture
 
 Noxs runs entirely inside Android's app sandbox. It does not modify the
@@ -133,6 +164,8 @@ environment only. Details: [docs/SECURITY.md](docs/SECURITY.md) ·
 
 ## License
 
-Apache-2.0 — original implementation, no third-party code or branding
+Apache-2.0 — original implementation, no third-party branding
 redistributed. Runtime artifacts (Debian rootfs, proot, code-server) are
-fetched from their official sources under their own licenses.
+fetched from their official sources under their own licenses. Bundled
+editor components carry their own licenses: sora-editor (LGPL-2.1) and
+Squircle CE grammar/theme assets (Apache-2.0) — see NOTICE.md.
