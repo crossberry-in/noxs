@@ -566,8 +566,7 @@
     <string name="settings_volume_keys_desc">Use volume keys for terminal navigation</string>
     <string name="settings_bell_desc">Play a sound on terminal events</string>
 
-</resources>
-    <!-- NXEditor (native code editor) -->
+<!-- NXEditor (native code editor) -->
     <string name="title_editor">NXEditor</string>
     <string name="nav_editor">Editor</string>
     <string name="action_back">‹</string>
@@ -599,3 +598,4 @@
     <string name="editor_renamed">Renamed to %1$s</string>
     <string name="editor_invalid_name">Names cannot be empty, contain \"/\", or start with \".\"</string>
     <string name="editor_workspace_missing">Workspace folder not found — opening /home/noxs</string>
+</resources>
