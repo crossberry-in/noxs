@@ -183,7 +183,7 @@ class NoxsEditorFilesystemTest {
         val entries = fs.list("/home/noxs/my projects")
         assertEquals("пример файл — test.md", entries.single().name)
         fs.delete(name)
-        assertFalse(File(rootfs, "home/noxs/my projects", "пример файл — test.md").exists())
+        assertFalse(File(rootfs, "home/noxs/my projects/пример файл — test.md").exists())
     }
 
     // ---------------------------------------------- create / rename / delete
