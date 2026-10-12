@@ -137,18 +137,18 @@ class CodeServerSupportTest {
 
     @Test
     fun `choose port keeps a free preferred port`() {
-        assertEquals(8080, CodeServerSupport.choosePort(8080) { false })
+        assertEquals(8080, CodeServerSupport.choosePort(8080, isBusy = { false }))
     }
 
     @Test
     fun `choose port skips busy ports`() {
         val busy = setOf(8080, 8081, 8082)
-        assertEquals(8083, CodeServerSupport.choosePort(8080) { it in busy })
+        assertEquals(8083, CodeServerSupport.choosePort(8080, isBusy = { it in busy }))
     }
 
     @Test
     fun `choose port gives up after max attempts`() {
-        assertNull(CodeServerSupport.choosePort(8080, { true }, maxAttempts = 3))
+        assertNull(CodeServerSupport.choosePort(8080, isBusy = { true }, maxAttempts = 3))
     }
 
     // -------------------------------------------------- navigation policy
