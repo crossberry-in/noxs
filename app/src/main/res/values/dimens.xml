@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- NXEditor dimensions -->
-<resources>
-    <dimen name="editor_explorer_height">220dp</dimen>
-    <dimen name="editor_tab_padding_h">10dp</dimen>
-    <dimen name="editor_tab_padding_v">6dp</dimen>
-</resources>

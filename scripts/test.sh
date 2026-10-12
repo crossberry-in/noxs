@@ -7,6 +7,7 @@
 #   --scripts       shellcheck + bash -n over all shell tooling
 #   --nx            functional tests for the NX package system scripts
 #   --ai            offline functional tests for the Noxs AI Agent runtime
+#   --code          sandboxed functional tests for the `noxs code` lifecycle
 #   --all           everything (default)
 set -uo pipefail
 
@@ -120,6 +121,16 @@ if [ "$MODE" = "--all" ] || [ "$MODE" = "--ai" ]; then
         python3 scripts/test_nx_ai.py || fail "ai functional tests"
     else
         fail "python3 is required for the AI agent tests"
+    fi
+fi
+
+# ---- code-server CLI ------------------------------------------------------
+if [ "$MODE" = "--all" ] || [ "$MODE" = "--code" ]; then
+    step "code-server CLI lifecycle tests (sandboxed)"
+    if command -v python3 >/dev/null 2>&1; then
+        bash scripts/test-code-cli.sh || fail "code CLI tests"
+    else
+        fail "python3 is required for the code CLI tests"
     fi
 fi
 

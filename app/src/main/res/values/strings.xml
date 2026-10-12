@@ -194,7 +194,7 @@
     <!-- About -->
     <string name="title_about">About Noxs</string>
     <string name="about_body">Noxs by CrossberryWeb.\n\nFor help, feedback, or support:\nWebsite: https://crossberry.vercel.app\nEmail: crossberryweb@gmail.com</string>
-    <string name="about_licenses">Open-source software:\n\u2022 Code editor engine: sora-editor (LGPL-2.1) \u2014 io.github.rosemoe:editor\n\u2022 Bundled TextMate grammars and Darcula theme: Squircle CE contributors (Apache-2.0) \u2014 github.com/massivemadness/Squircle-CE</string>
+    <string name="about_licenses">Open-source software:\n\u2022 Editor: code-server (MIT) \u2014 github.com/coder/code-server\n\u2022 Editor runtime: Visual Studio Code (MIT) \u2014 github.com/microsoft/vscode\n\u2022 Both are downloaded at install time into the Noxs guest and never bundled with the APK</string>
     <string name="about_version">Version %1$s</string>
 
     <!-- Notifications -->
@@ -566,36 +566,39 @@
     <string name="settings_volume_keys_desc">Use volume keys for terminal navigation</string>
     <string name="settings_bell_desc">Play a sound on terminal events</string>
 
-<!-- NXEditor (native code editor) -->
-    <string name="title_editor">NXEditor</string>
+<!-- Editor: code-server (VS Code Server) workspace rendered in a WebView -->
+    <string name="title_editor">Editor</string>
     <string name="nav_editor">Editor</string>
     <string name="action_back">‹</string>
-    <string name="action_save">Save</string>
     <string name="editor_open_terminal">Open in Terminal</string>
-    <string name="editor_files">Files</string>
-    <string name="editor_new_file">+ File</string>
-    <string name="editor_new_folder">+ Folder</string>
-    <string name="editor_save">Save</string>
-    <string name="editor_empty_hint">No file open.\n\nTap Files to browse the current working directory\nof your Noxs terminal session.</string>
-    <string name="editor_status_saved">Saved</string>
-    <string name="editor_status_dirty">● Unsaved changes</string>
-    <string name="editor_status_no_file">No file open</string>
-    <string name="editor_file_changed_on_disk">File changed on disk — Save overwrites it, Reload discards your edits.</string>
     <string name="editor_action_reload">Reload</string>
-    <string name="editor_new_name_hint">Name (relative to the current folder)</string>
-    <string name="editor_open_terminal_missing">Workspace folder is missing — refresh the file list.</string>
+    <string name="editor_menu">⋮</string>
+    <string name="editor_menu_restart">Restart server</string>
+    <string name="editor_menu_stop">Stop server</string>
+    <string name="editor_menu_log">Server log</string>
+    <string name="editor_retry">Retry</string>
+    <string name="editor_start">Start editor</string>
+    <string name="editor_chip_checking">checking</string>
+    <string name="editor_chip_installing">installing</string>
+    <string name="editor_chip_starting">starting</string>
+    <string name="editor_chip_opening">opening</string>
+    <string name="editor_chip_ready">ready</string>
+    <string name="editor_chip_failed">failed</string>
+    <string name="editor_chip_stopped">stopped</string>
+    <string name="editor_phase_checking">Checking the code-server installation…</string>
+    <string name="editor_phase_installing">Installing code-server into your Noxs environment…</string>
+    <string name="editor_phase_starting">Starting the code-server…</string>
+    <string name="editor_phase_opening">Opening the workspace…</string>
+    <string name="editor_phase_failed">The editor could not start</string>
+    <string name="editor_phase_stopped">code-server stopped</string>
+    <string name="editor_install_hint">Downloading the official code-server release for your architecture (~500 MB).\n\nKeep the app open — progress appears below.</string>
+    <string name="editor_stopped_hint">The editor server is stopped.\n\nStart it again when you need it.</string>
+    <string name="editor_auth_unavailable">Server authentication is not configured — start the server again.</string>
+    <string name="editor_auth_failed">Could not authenticate against the local server.</string>
+    <string name="editor_server_unreachable">The editor server stopped responding — retry to restart it.</string>
+    <string name="editor_log_empty">No server log yet.</string>
+    <string name="editor_open_terminal_missing">Workspace folder is missing — retry to re-resolve it.</string>
     <string name="editor_open_terminal_failed">Could not create a terminal session here: %1$s</string>
     <string name="editor_session_created">Terminal opened at %1$s</string>
-    <string name="editor_discard_changes_title">Unsaved changes</string>
-    <string name="editor_discard_changes_msg">Some open files have unsaved changes. Save them before leaving the editor?</string>
-    <string name="editor_discard">Discard</string>
-    <string name="editor_save_all">Save all</string>
-    <string name="editor_saved_all">All changes saved</string>
-    <string name="editor_save_failed">Save failed: %1$s</string>
-    <string name="editor_loaded_too_many">Too many open files</string>
-    <string name="editor_deleted">Deleted %1$s</string>
-    <string name="editor_created">Created %1$s</string>
-    <string name="editor_renamed">Renamed to %1$s</string>
-    <string name="editor_invalid_name">Names cannot be empty, contain \"/\", or start with \".\"</string>
     <string name="editor_workspace_missing">Workspace folder not found — opening /home/noxs</string>
 </resources>

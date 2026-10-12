@@ -60,6 +60,27 @@ class NoxsApplication : Application() {
         )
     }
 
+    /**
+     * Code-server (VS Code Server) lifecycle manager for the Editor screen.
+     * Application-scoped: the managed server process must survive Activity
+     * recreation, and duplicate-start prevention is process-wide.
+     */
+    val codeServer: com.crossberry.noxs.runtime.CodeServerManager by lazy {
+        com.crossberry.noxs.runtime.CodeServerManager(
+            pathsProvider = { environments.activePaths() },
+            launcherProvider = {
+                val p = environments.activePaths()
+                if (p.isInstalled()) {
+                    com.crossberry.noxs.runtime.NoxsRuntimeFactory.launcher(
+                        p, com.crossberry.noxs.runtime.NoxsResources(p)
+                    )
+                } else {
+                    null
+                }
+            }
+        )
+    }
+
     override fun onCreate() {
         super.onCreate()
         paths = NoxsPaths(this)

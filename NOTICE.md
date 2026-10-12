@@ -26,14 +26,18 @@ licenses — it is not redistributed by this project:
 Android, Debian, Ubuntu, VS Code and their marks belong to their respective
 owners. Noxs is not affiliated with, endorsed by, or derived from Termux.
 
-## NXEditor editor components (bundled, since v0.14.0)
+## Editor components (downloaded at install time, since v0.15.0)
 
-- sora-editor (`io.github.rosemoe:editor` + `io.github.rosemoe:language-textmate`
-  0.24.3) — the code editing engine Squircle CE embeds. License: LGPL-2.1.
-  Source: https://github.com/Rosemoe/sora-editor. Used unmodified as a Maven
-  dependency; it is not part of this repository's original code.
-- TextMate grammar assets (24 languages) and the Darcula token theme,
-  curated from Squircle CE's repository. License: Apache-2.0.
-  Source: https://github.com/massivemadness/Squircle-CE
-  (feature-editor/impl assets, grammar definitions). Included with
-  attribution per the Apache-2.0 license.
+The built-in editor is [code-server](https://github.com/coder/code-server)
+rendered in an Android WebView. It is NOT bundled with this repository or
+with the APK:
+
+- code-server — License: MIT (Coder). Downloaded by the guest
+  `noxs code install` command directly from the official GitHub releases
+  at install time, with sha256 verification against the release
+  SHASUMS.txt when upstream publishes one.
+- Visual Studio Code (the workbench code-server serves) — License: MIT
+  (Microsoft). Served by code-server from the same install.
+
+The former native editor (sora-editor engine plus Squircle CE grammar and
+theme assets) was removed in v0.15.0 and is no longer distributed.

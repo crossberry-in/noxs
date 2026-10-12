@@ -1,57 +1,62 @@
 /*
  * Noxs — original implementation.
- * NXEditor: native code editor over the active Noxs Linux environment.
+ * Noxs Editor: the real code-server (VS Code Server) workspace rendered in
+ * an Android WebView, served by the Noxs Linux guest on 127.0.0.1.
  *
- * Editing surface: sora-editor's CodeEditor — the same engine Squircle CE
- * embeds (pinned to Squircle's version). Grammar + theme assets are curated
- * from the Squircle CE repository (Apache-2.0, attributed in About/README).
+ * Flow (sidebar Editor entry):
+ *   1. resolve the active terminal session's working directory (OSC 7)
+ *   2. check whether code-server is installed → install screen with progress
+ *   3. start the server through `noxs code start --foreground` (managed by
+ *      CodeServerManager under its own long-lived proot process)
+ *   4. wait for actual HTTP readiness on the loopback
+ *   5. attach a WebView restricted to the server origin, auto-authenticating
+ *      against code-server's password login (the credential is never logged)
  *
- * Why a native screen and not a JS plugin: sora-editor is a native Android
- * View and cannot render inside the WebView-based Plugin Window. Per the
- * Noxs architecture this ships as a built-in screen exposed through the
- * sidebar and the existing navigation conventions.
- *
- * Filesystem: every operation goes through NoxsEditorFilesystem (validated,
- * canonicalized, no shell). The workspace defaults to the active terminal
- * session's working directory as reported by the shell via OSC 7.
+ * This screen REPLACES the former native sora-editor/Squircle NXEditor UI.
+ * Terminal sessions, files and the workspace tracking stay untouched.
  */
 package com.crossberry.noxs.ui
 
+import android.annotation.SuppressLint
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
-import android.text.InputType
+import android.os.Message
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
-import android.widget.EditText
+import android.view.ViewGroup
+import android.webkit.CookieManager
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.FrameLayout
+import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.crossberry.noxs.R
 import com.crossberry.noxs.databinding.ActivityEditorBinding
+import com.crossberry.noxs.runtime.CodeServerManager
+import com.crossberry.noxs.runtime.CodeServerSupport
 import com.crossberry.noxs.runtime.NoxsEditorFilesystem
 import com.crossberry.noxs.runtime.NoxsPaths
 import com.crossberry.noxs.runtime.NoxsService
-import com.crossberry.noxs.shared.NoxsConstants
+import com.crossberry.noxs.runtime.NoxsUrlGuard
 import com.crossberry.noxs.runtime.RuntimeHolder
-import io.github.rosemoe.sora.lang.EmptyLanguage
-import io.github.rosemoe.sora.lang.Language
-import io.github.rosemoe.sora.langs.textmate.TextMateLanguage
-import io.github.rosemoe.sora.langs.textmate.registry.FileProviderRegistry
-import io.github.rosemoe.sora.langs.textmate.registry.GrammarRegistry
-import io.github.rosemoe.sora.langs.textmate.registry.ThemeRegistry
-import io.github.rosemoe.sora.langs.textmate.registry.model.DefaultGrammarDefinition
-import io.github.rosemoe.sora.langs.textmate.registry.provider.AssetsFileResolver
-import io.github.rosemoe.sora.text.Content
-import io.github.rosemoe.sora.text.ContentListener
-import kotlinx.coroutines.Dispatchers
+import com.crossberry.noxs.shared.NoxsConstants
+import com.crossberry.noxs.shared.NoxsLog
+import android.util.Base64
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.eclipse.tm4e.core.registry.IGrammarSource
-import org.eclipse.tm4e.core.registry.IThemeSource
-import org.json.JSONArray
-import org.json.JSONObject
-import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 class EditorActivity : AppCompatActivity() {
 
@@ -59,52 +64,20 @@ class EditorActivity : AppCompatActivity() {
     private lateinit var paths: NoxsPaths
     private lateinit var fs: NoxsEditorFilesystem
 
-    private class GrammarEntry(
-        val name: String,
-        val scopeName: String,
-        val grammar: String,
-        val languageConfiguration: String,
-        val embedded: MutableMap<String, String> = HashMap()
-    )
-
-    /** One open file. The editor holds the live text; [buffer] mirrors it. */
-    private class EditorTab(
-        var guestPath: String,
-        var title: String,
-        var buffer: String,
-        var savedLastModified: Long,
-        var savedSize: Long,
-        var dirty: Boolean,
-        var cursorLeftLine: Int = 0,
-        var cursorLeftColumn: Int = 0,
-        var cursorRightLine: Int = 0,
-        var cursorRightColumn: Int = 0
-    )
+    private val manager: CodeServerManager
+        get() = (application as com.crossberry.noxs.NoxsApplication).codeServer
 
     private var workspace: String = NoxsConstants.DEFAULT_USER_HOME
-    private var explorerDir: String = NoxsConstants.DEFAULT_USER_HOME
-    private val tabs = mutableListOf<EditorTab>()
-    private var activeIndex = -1
-    private var explorerAdapter: TwoLineAdapter? = null
-    private var engineReady = false
-    private var attachedContent: Content? = null
-    private var suppressDirtyListener = false
+    private var webView: WebView? = null
+    private var serverPort: Int? = null
+    private var flowJob: Job? = null
+    private var authAttempts = 0
+    private var submittingLogin = AtomicBoolean(false)
+    private var ready = false
     private var openTerminalPending = false
+    private var phaseVisible: Phase = Phase.CHECKING
 
-    private val dirtyListener = object : ContentListener {
-        override fun beforeReplace(content: Content) = onContentModified()
-        override fun afterInsert(
-            content: Content, startLine: Int, startColumn: Int,
-            endLine: Int, endColumn: Int, insertedContent: CharSequence
-        ) = onContentModified()
-
-        override fun afterDelete(
-            content: Content, startLine: Int, startColumn: Int,
-            endLine: Int, endColumn: Int, deletedContent: CharSequence
-        ) = onContentModified()
-
-        override fun beforeModification(content: Content) {}
-    }
+    private enum class Phase { CHECKING, INSTALLING, STARTING, OPENING, READY, FAILED, STOPPED }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -113,554 +86,382 @@ class EditorActivity : AppCompatActivity() {
         paths = (application as com.crossberry.noxs.NoxsApplication).environments.activePaths()
         fs = NoxsEditorFilesystem(paths.rootfs)
 
-        workspace = resolveInitialWorkspace()
-        explorerDir = workspace
-
-        binding.editorView.setColorScheme(NoxsEditorScheme())
-        binding.editorView.setTextSize(14f)
-        binding.editorView.setTypefaceText(android.graphics.Typeface.MONOSPACE)
+        workspace = resolveInitialWorkspace(savedInstanceState)
+        binding.workspacePath.text = workspace
+        setChip(Phase.CHECKING)
 
         binding.btnBack.setOnClickListener { finish() }
-        binding.btnRefresh.setOnClickListener { refreshAll() }
-        binding.btnToggleExplorer.setOnClickListener { toggleExplorer() }
-        binding.btnNewFile.setOnClickListener { promptCreate(isDirectory = false) }
-        binding.btnNewFolder.setOnClickListener { promptCreate(isDirectory = true) }
-        binding.btnSave.setOnClickListener { saveActive() }
         binding.btnOpenTerminal.setOnClickListener { openWorkspaceInTerminal() }
-
-        explorerAdapter = TwoLineAdapter.bind(binding.explorerList, emptyList())
+        binding.btnReload.setOnClickListener { reloadEditor() }
+        binding.btnMenu.setOnClickListener { showMenu(it) }
+        binding.btnRetry.setOnClickListener {
+            binding.btnRetry.text = getString(R.string.editor_retry)
+            startFlow()
+        }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (tabs.any { it.dirty }) confirmDiscardOrSaveAll() else finish()
+                val web = webView
+                // In-editor history first; finishing keeps the server (and VS
+                // Code's hot-exit backups) alive, so nothing is discarded.
+                if (ready && web != null && web.canGoBack()) {
+                    web.goBack()
+                } else {
+                    finish()
+                }
             }
         })
 
-        // Grammar engine + theme load on a background thread (assets only).
-        lifecycleScope.launch {
-            runCatching { ensureLanguageEngine() }
-                .onFailure { com.crossberry.noxs.shared.NoxsLog.w("NXEditor", "grammar engine: ${it.message}") }
-        }
+        observeInstallLines()
 
-        renderWorkspaceTitle()
-        refreshExplorer()
+        val restoredPort = savedInstanceState?.getInt(KEY_PORT, -1) ?: -1
+        if (restoredPort > 0 && manager.isRunning()) {
+            // Activity recreation: reattach to the already-running server.
+            serverPort = restoredPort
+            attachWebView(restoredPort, autoLoad = false)
+            val restored = webView?.restoreState(savedInstanceState)
+            if (restored == null) {
+                webView?.loadUrl("http://127.0.0.1:$restoredPort/")
+            }
+        } else {
+            startFlow()
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(KEY_WORKSPACE, workspace)
+        serverPort?.let { outState.putInt(KEY_PORT, it) }
+        webView?.saveState(outState)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        webView?.onResume()
+    }
+
+    override fun onPause() {
+        webView?.onPause()
+        super.onPause()
     }
 
     override fun onDestroy() {
-        detachContentListener()
-        runCatching { binding.editorView.release() }
+        flowJob?.cancel()
+        detachWebView()
         super.onDestroy()
     }
 
-    // ------------------------------------------------------- workspace / nav
+    // ------------------------------------------------------- flow pipeline
 
-    private fun resolveInitialWorkspace(): String {
-        intent.getStringExtra(EXTRA_WORKSPACE)?.let { requested ->
-            if (fs.isDirectory(requested)) return requested
+    private fun startFlow(restart: Boolean = false) {
+        flowJob?.cancel()
+        ready = false
+        detachWebView()
+        showPanel(visible = true)
+        binding.editorProgress.visibility = View.VISIBLE
+        binding.btnRetry.visibility = View.GONE
+        setChip(Phase.CHECKING)
+        setPhaseText(getString(R.string.editor_phase_checking))
+        flowJob = lifecycleScope.launch {
+            val installError = ensureInstalled()
+            if (installError != null) {
+                fail(installError)
+                return@launch
+            }
+            setChip(Phase.STARTING)
+            setPhaseText(getString(R.string.editor_phase_starting))
+            val started = if (restart) manager.restart(workspace) else manager.start(workspace)
+            val port = started.getOrElse { e ->
+                fail(e.message)
+                return@launch
+            }
+            serverPort = port
+            setChip(Phase.OPENING)
+            setPhaseText(getString(R.string.editor_phase_opening))
+            attachWebView(port)
         }
-        // Active session cwd as reported by the shell (OSC 7).
-        RuntimeHolder.sessions?.sessions?.value?.firstOrNull()?.let { entry ->
-            entry.session.emulator.currentWorkingDirectory?.let { cwd ->
-                if (fs.isDirectory(cwd)) return cwd
+    }
+
+    /** Returns an error message when installation failed, null otherwise. */
+    private suspend fun ensureInstalled(): String? {
+        if (manager.isInstalled()) return null
+        setChip(Phase.INSTALLING)
+        setPhaseText(getString(R.string.editor_phase_installing))
+        binding.statusDetail.text = getString(R.string.editor_install_hint)
+        binding.progressScroll.visibility = View.VISIBLE
+        val result = manager.install()
+        binding.progressScroll.visibility = View.GONE
+        return result.exceptionOrNull()?.message
+    }
+
+    private fun fail(message: String?) {
+        setChip(Phase.FAILED)
+        setPhaseText(getString(R.string.editor_phase_failed))
+        binding.editorProgress.visibility = View.GONE
+        binding.btnRetry.text = getString(R.string.editor_retry)
+        binding.btnRetry.visibility = View.VISIBLE
+        val detail = buildString {
+            append(message ?: getString(R.string.err_generic))
+            val log = manager.logTailLines(5)
+            if (log.isNotEmpty()) {
+                append("\n\n")
+                append(log.joinToString("\n"))
             }
         }
-        if (fs.isDirectory(NoxsConstants.DEFAULT_USER_HOME)) {
-            return NoxsConstants.DEFAULT_USER_HOME
-        }
-        Toast.makeText(this, R.string.editor_workspace_missing, Toast.LENGTH_LONG).show()
-        return "/"
+        binding.statusDetail.text = detail
+        binding.progressScroll.visibility = View.VISIBLE
+        ready = false
     }
 
-    private fun renderWorkspaceTitle() {
-        binding.workspacePath.text = workspace
-    }
+    // ------------------------------------------------------------ web view
 
-    private fun toggleExplorer() {
-        val visible = binding.explorerList.visibility == View.VISIBLE
-        binding.explorerList.visibility = if (visible) View.GONE else View.VISIBLE
-    }
-
-    // ------------------------------------------------------------- explorer
-
-    private fun refreshExplorer() {
-        lifecycleScope.launch {
-            val rows = withContext(Dispatchers.IO) { explorerRows() }
-            explorerAdapter?.submit(rows)
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun attachWebView(port: Int, autoLoad: Boolean = true) {
+        detachWebView()
+        val cfg = manager.readConfig()
+        if (cfg == null || cfg.auth != "password" || cfg.password.isNullOrBlank()) {
+            fail(getString(R.string.editor_auth_unavailable))
+            return
         }
-    }
-
-    private fun explorerRows(): List<TwoLineRow> {
-        val rows = mutableListOf<TwoLineRow>()
-        if (explorerDir != workspace) {
-            rows.add(TwoLineRow("…", explorerDir) {
-                explorerDir = File(explorerDir).parent ?: workspace
-                refreshExplorer()
-            })
-        }
-        val entries = try {
-            fs.list(explorerDir)
-        } catch (e: Exception) {
-            rows.add(TwoLineRow(getString(R.string.err_generic), e.message ?: "", null, null))
-            return rows
-        }
-        for (entry in entries) {
-            val meta = if (entry.isDirectory) "dir" else "${entry.sizeBytes / 1024} KB"
-            rows.add(
-                TwoLineRow(
-                    title = (if (entry.isDirectory) "▸ " else "  ") + entry.name,
-                    subtitle = meta,
-                    onClick = {
-                        if (entry.isDirectory) {
-                            explorerDir = entry.guestPath
-                            refreshExplorer()
-                        } else {
-                            openFile(entry.guestPath)
-                        }
-                    },
-                    onLongClick = { promptEntryActions(entry) }
-                )
-            )
-        }
-        return rows
-    }
-
-    private fun promptEntryActions(entry: NoxsEditorFilesystem.ListingEntry) {
-        val options = arrayOf(
-            getString(R.string.action_rename),
-            getString(R.string.action_delete)
+        authAttempts = 0
+        val web = WebView(this)
+        web.layoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
         )
-        AlertDialog.Builder(this)
-            .setTitle(entry.name)
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> promptRename(entry)
-                    1 -> confirmDelete(entry)
+        web.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            allowFileAccess = false
+            allowContentAccess = false
+            mediaPlaybackRequiresUserGesture = false
+            useWideViewPort = true
+            loadWithOverviewMode = true
+            setSupportZoom(false)
+            builtInZoomControls = false
+            displayZoomControls = false
+            textZoom = 100
+            cacheMode = WebSettings.LOAD_DEFAULT
+        }
+        web.setBackgroundColor(Color.parseColor("#111111"))
+        web.isFocusable = true
+        web.isFocusableInTouchMode = true
+        web.webViewClient = EditorWebClient(port, cfg.password)
+        web.webChromeClient = EditorChromeClient(port)
+        CookieManager.getInstance().setAcceptCookie(true)
+        binding.webContainer.addView(web)
+        webView = web
+        ready = true
+        showPanel(visible = false)
+        setChip(Phase.READY)
+        if (autoLoad) {
+            web.loadUrl("http://127.0.0.1:$port/")
+        }
+    }
+
+    private fun detachWebView() {
+        webView?.let { w ->
+            binding.webContainer.removeAllViews()
+            w.stopLoading()
+            w.destroy()
+        }
+        webView = null
+    }
+
+    private fun reloadEditor() {
+        val web = webView
+        if (ready && web != null) {
+            web.reload()
+        } else {
+            startFlow()
+        }
+    }
+
+    private inner class EditorWebClient(
+        private val port: Int,
+        private val password: String
+    ) : WebViewClient() {
+
+        override fun shouldOverrideUrlLoading(
+            view: WebView,
+            request: WebResourceRequest
+        ): Boolean {
+            if (!request.isForMainFrame) return false
+            val url = request.url.toString()
+            if (CodeServerSupport.isAllowedEditorUrl(url, port)) return false
+            // Never navigate the editor away. Safe external links open in the
+            // guarded Noxs web window; everything else is blocked.
+            when (val decision = NoxsUrlGuard.check(url)) {
+                is NoxsUrlGuard.Decision.Allowed -> openInWebWindow(decision.url)
+                is NoxsUrlGuard.Decision.Rejected ->
+                    NoxsLog.w(TAG, "blocked editor navigation (${decision.reason})")
+            }
+            return true
+        }
+
+        override fun onPageFinished(view: WebView, url: String) {
+            if (CodeServerSupport.isLoginPage(url)) {
+                if (authAttempts >= MAX_LOGIN_ATTEMPTS) {
+                    fail(getString(R.string.editor_auth_failed))
+                    return
                 }
-            }
-            .setNegativeButton(R.string.action_cancel, null)
-            .show()
-    }
-
-    private fun promptRename(entry: NoxsEditorFilesystem.ListingEntry) {
-        val input = EditText(this).apply {
-            inputType = InputType.TYPE_CLASS_TEXT
-            setText(entry.name)
-            setSelection(entry.name.length)
-        }
-        AlertDialog.Builder(this)
-            .setTitle(R.string.action_rename)
-            .setView(wrapInput(input))
-            .setPositiveButton(R.string.action_rename) { _, _ ->
-                val newName = input.text.toString().trim()
-                if (!isValidName(newName)) {
-                    Toast.makeText(this, R.string.editor_invalid_name, Toast.LENGTH_SHORT).show()
-                    return@setPositiveButton
+                // Rate-limited auto-login: fill + submit the password form.
+                if (submittingLogin.compareAndSet(false, true)) {
+                    authAttempts++
+                    val b64 = Base64.encodeToString(
+                        password.toByteArray(Charsets.UTF_8), Base64.NO_WRAP
+                    )
+                    view.evaluateJavascript(CodeServerSupport.loginInjectScript(b64), null)
+                    view.postDelayed({ submittingLogin.set(false) }, 1500)
                 }
-                lifecycleScope.launch {
-                    runFs(success = getString(R.string.editor_renamed, newName)) {
-                        val target = explorerDir.trimEnd('/') + "/" + newName
-                        fs.rename(entry.guestPath, target)
-                        // keep open tabs pointing at the renamed path
-                        tabs.forEach { tab ->
-                            if (tab.guestPath == entry.guestPath) {
-                                tab.guestPath = target
-                                tab.title = newName
-                            }
-                        }
-                        renderTabs()
-                        renderStatus()
-                    }
-                    refreshExplorer()
-                }
-            }
-            .setNegativeButton(R.string.action_cancel, null)
-            .show()
-    }
-
-    private fun confirmDelete(entry: NoxsEditorFilesystem.ListingEntry) {
-        AlertDialog.Builder(this)
-            .setTitle(getString(R.string.action_delete))
-            .setMessage(entry.guestPath)
-            .setPositiveButton(R.string.action_delete) { _, _ ->
-                lifecycleScope.launch {
-                    runFs(success = getString(R.string.editor_deleted, entry.name)) {
-                        fs.delete(entry.guestPath)
-                        closeTabsFor(entry.guestPath, force = true)
-                    }
-                    refreshExplorer()
-                }
-            }
-            .setNegativeButton(R.string.action_cancel, null)
-            .show()
-    }
-
-    private fun promptCreate(isDirectory: Boolean) {
-        val input = EditText(this).apply {
-            inputType = InputType.TYPE_CLASS_TEXT
-            hint = getString(R.string.editor_new_name_hint)
-        }
-        AlertDialog.Builder(this)
-            .setTitle(if (isDirectory) R.string.editor_new_folder else R.string.editor_new_file)
-            .setView(wrapInput(input))
-            .setPositiveButton(R.string.action_create) { _, _ ->
-                val name = input.text.toString().trim()
-                if (!isValidName(name)) {
-                    Toast.makeText(this, R.string.editor_invalid_name, Toast.LENGTH_SHORT).show()
-                    return@setPositiveButton
-                }
-                val target = explorerDir.trimEnd('/') + "/" + name
-                lifecycleScope.launch {
-                    runFs(success = getString(R.string.editor_created, name)) {
-                        if (isDirectory) fs.createDirectory(target) else fs.createFile(target)
-                    }
-                    refreshExplorer()
-                    if (!isDirectory) openFile(target)
-                }
-            }
-            .setNegativeButton(R.string.action_cancel, null)
-            .show()
-    }
-
-    private fun wrapInput(input: EditText): View {
-        val pad = (16 * resources.displayMetrics.density).toInt()
-        val frame = android.widget.FrameLayout(this)
-        frame.setPadding(pad, 0, pad, 0)
-        frame.addView(input)
-        return frame
-    }
-
-    private fun isValidName(name: String): Boolean =
-        name.isNotEmpty() && name != "." && name != ".." &&
-            !name.contains('/') && !name.startsWith(".") && name.length <= 255
-
-    // ------------------------------------------------------------ open / tabs
-
-    private fun openFile(guestPath: String) {
-        if (tabs.size >= MAX_OPEN_TABS) {
-            Toast.makeText(this, R.string.editor_loaded_too_many, Toast.LENGTH_SHORT).show()
-            return
-        }
-        lifecycleScope.launch {
-            val loaded = withContext(Dispatchers.IO) {
-                runCatching { fs.read(guestPath) }
-            }
-            loaded.onFailure { e ->
-                showError(e.message ?: getString(R.string.err_generic))
-            }.onSuccess { file ->
-                val existing = tabs.indexOfFirst { it.guestPath == file.guestPath }
-                if (existing >= 0) {
-                    setActiveTab(existing)
-                    return@onSuccess
-                }
-                ensureLanguageEngineReady()
-                val tab = EditorTab(
-                    guestPath = file.guestPath,
-                    title = file.guestPath.substringAfterLast('/'),
-                    buffer = file.text,
-                    savedLastModified = file.lastModifiedMs,
-                    savedSize = file.sizeBytes,
-                    dirty = false
-                )
-                tabs.add(tab)
-                setActiveTab(tabs.size - 1)
-                refreshExplorer()
-            }
-        }
-    }
-
-    private suspend fun ensureLanguageEngineReady() {
-        runCatching { ensureLanguageEngine() }
-            .onFailure { com.crossberry.noxs.shared.NoxsLog.w("NXEditor", "grammar engine: ${it.message}") }
-    }
-
-    private fun languageFor(path: String): Language {
-        val scope = fs.scopeFor(path.substringAfterLast('/'))
-        return if (scope == null) EmptyLanguage() else try {
-            TextMateLanguage.create(scope, true)
-        } catch (_: Exception) {
-            EmptyLanguage()
-        }
-    }
-
-    private fun setActiveTab(index: Int) {
-        // capture the outgoing tab
-        val outgoing = tabs.getOrNull(activeIndex)
-        if (outgoing != null && index != activeIndex) {
-            outgoing.buffer = binding.editorView.text.toString()
-            val cursor = binding.editorView.cursor
-            val left = cursor.left()
-            val right = cursor.right()
-            outgoing.cursorLeftLine = left.line
-            outgoing.cursorLeftColumn = left.column
-            outgoing.cursorRightLine = right.line
-            outgoing.cursorRightColumn = right.column
-        }
-        activeIndex = index
-        val tab = tabs.getOrNull(index)
-        if (tab == null) {
-            detachContentListener()
-            binding.editorView.visibility = View.GONE
-            binding.editorEmpty.visibility = View.VISIBLE
-            binding.editorStatus.text = getString(R.string.editor_status_no_file)
-            renderTabs()
-            return
-        }
-        binding.editorView.visibility = View.VISIBLE
-        binding.editorEmpty.visibility = View.GONE
-        detachContentListener()
-        suppressDirtyListener = true
-        binding.editorView.setText(tab.buffer)
-        suppressDirtyListener = false
-        binding.editorView.setEditorLanguage(languageFor(tab.guestPath))
-        attachContentListener()
-        binding.editorView.setSelectionRegion(
-            tab.cursorLeftLine, tab.cursorLeftColumn,
-            tab.cursorRightLine, tab.cursorRightColumn
-        )
-        renderTabs()
-        renderStatus()
-        checkExternalChange(tab, showBanner = true)
-    }
-
-    private fun attachContentListener() {
-        attachedContent = binding.editorView.text
-        attachedContent?.addContentListener(dirtyListener)
-    }
-
-    private fun detachContentListener() {
-        attachedContent?.removeContentListener(dirtyListener)
-        attachedContent = null
-    }
-
-    private fun onContentModified() {
-        if (suppressDirtyListener) return
-        val tab = tabs.getOrNull(activeIndex) ?: return
-        if (!tab.dirty) {
-            tab.dirty = true
-            renderTabs()
-        }
-        renderStatus()
-    }
-
-    private fun closeTabsFor(guestPath: String, force: Boolean) {
-        val index = tabs.indexOfFirst { it.guestPath == guestPath }
-        if (index < 0) return
-        val tab = tabs[index]
-        if (tab.dirty && !force) {
-            confirmCloseTab(index)
-            return
-        }
-        tabs.removeAt(index)
-        if (activeIndex == index) {
-            activeIndex = -1
-            setActiveTab(if (tabs.isEmpty()) -1 else index.coerceAtMost(tabs.size - 1))
-        } else if (activeIndex > index) {
-            activeIndex--
-        }
-        renderTabs()
-    }
-
-    private fun confirmCloseTab(index: Int) {
-        val tab = tabs.getOrNull(index) ?: return
-        AlertDialog.Builder(this)
-            .setTitle(tab.title)
-            .setMessage(R.string.editor_discard_changes_msg)
-            .setPositiveButton(R.string.action_save) { _, _ ->
-                lifecycleScope.launch { saveTab(index); closeTabsFor(tab.guestPath, force = true) }
-            }
-            .setNegativeButton(R.string.editor_discard) { _, _ ->
-                closeTabsFor(tab.guestPath, force = true)
-            }
-            .setNeutralButton(R.string.action_cancel, null)
-            .show()
-    }
-
-    // ------------------------------------------------------------ tab strip
-
-    private fun renderTabs() {
-        val row = binding.editorTabsRow
-        row.removeAllViews()
-        binding.editorTabsScroll.visibility = if (tabs.isEmpty()) View.GONE else View.VISIBLE
-        val padH = resources.getDimensionPixelSize(R.dimen.editor_tab_padding_h)
-        val padV = resources.getDimensionPixelSize(R.dimen.editor_tab_padding_v)
-        tabs.forEachIndexed { index, tab ->
-            val chip = android.widget.LinearLayout(this)
-            chip.orientation = android.widget.LinearLayout.HORIZONTAL
-            chip.setPadding(padH, padV, padH, padV)
-            if (index == activeIndex) {
-                chip.setBackgroundColor(getColor(R.color.noxs_elevated))
             } else {
-                chip.setBackgroundColor(Color.TRANSPARENT)
-            }
-            val label = android.widget.TextView(this)
-            label.text = if (tab.dirty) tab.title + " ●" else tab.title
-            label.setTextColor(getColor(R.color.noxs_text))
-            label.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f)
-            chip.addView(label)
-            val close = android.widget.TextView(this)
-            close.text = " ✕"
-            close.setTextColor(getColor(R.color.noxs_text_dim))
-            close.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f)
-            close.setOnClickListener { closeTabsFor(tab.guestPath, force = false) }
-            chip.addView(close)
-            chip.setOnClickListener { if (index != activeIndex) setActiveTab(index) }
-            row.addView(chip)
-        }
-    }
-
-    // ------------------------------------------------------------ save / reload
-
-    private fun saveActive() {
-        val index = activeIndex
-        if (index < 0) return
-        lifecycleScope.launch { saveTab(index) }
-    }
-
-    private suspend fun saveTab(index: Int) {
-        val tab = tabs.getOrNull(index) ?: return
-        if (index == activeIndex) tab.buffer = binding.editorView.text.toString()
-        val result = withContext(Dispatchers.IO) {
-            runCatching {
-                fs.write(
-                    tab.guestPath, tab.buffer,
-                    expectedLastModifiedMs = tab.savedLastModified,
-                    expectedSizeBytes = tab.savedSize,
-                    force = false
-                )
-                val host = fs.validateGuestPath(tab.guestPath)
-                tab.savedLastModified = host.lastModified()
-                tab.savedSize = host.length()
+                authAttempts = 0
             }
         }
-        result.onSuccess {
-            tab.dirty = false
-            renderTabs()
-            renderStatus()
-            showError(null)
-            Toast.makeText(this, R.string.action_save, Toast.LENGTH_SHORT).show()
-        }.onFailure { e ->
-            val message = e.message ?: getString(R.string.err_generic)
-            if (message.contains("changed on disk")) {
-                confirmConflictSave(index)
-            } else {
-                showError(getString(R.string.editor_save_failed, message))
+
+        override fun onReceivedError(
+            view: WebView,
+            request: WebResourceRequest,
+            error: WebResourceError
+        ) {
+            if (request.isForMainFrame && ready) {
+                NoxsLog.w(TAG, "editor main-frame error: ${error.description}")
+                fail(getString(R.string.editor_server_unreachable))
             }
         }
     }
 
-    private fun confirmConflictSave(index: Int) {
-        val tab = tabs.getOrNull(index) ?: return
-        AlertDialog.Builder(this)
-            .setTitle(tab.title)
-            .setMessage(R.string.editor_file_changed_on_disk)
-            .setPositiveButton(R.string.action_save) { _, _ ->
-                lifecycleScope.launch {
-                    withContext(Dispatchers.IO) {
-                        runCatching { fs.write(tab.guestPath, tab.buffer, force = true) }
-                    }.onSuccess {
-                        tab.dirty = false
-                        renderTabs(); renderStatus(); showError(null)
-                    }.onFailure { e ->
-                        showError(getString(R.string.editor_save_failed, e.message ?: ""))
-                    }
-                }
-            }
-            .setNeutralButton(R.string.editor_action_reload) { _, _ ->
-                lifecycleScope.launch { reloadTab(index) }
-            }
-            .setNegativeButton(R.string.action_cancel, null)
-            .show()
-    }
+    private inner class EditorChromeClient(
+        private val port: Int
+    ) : WebChromeClient() {
 
-    private suspend fun reloadTab(index: Int) {
-        val tab = tabs.getOrNull(index) ?: return
-        val loaded = withContext(Dispatchers.IO) { runCatching { fs.read(tab.guestPath) } }
-        loaded.onSuccess { file ->
-            tab.buffer = file.text
-            tab.savedLastModified = file.lastModifiedMs
-            tab.savedSize = file.sizeBytes
-            tab.dirty = false
-            if (index == activeIndex) setActiveTab(index) else renderTabs()
-            showError(null)
-        }.onFailure { e -> showError(e.message ?: getString(R.string.err_generic)) }
-    }
-
-    private fun checkExternalChange(tab: EditorTab, showBanner: Boolean) {
-        lifecycleScope.launch {
-            val changed = withContext(Dispatchers.IO) {
-                runCatching {
-                    val host = fs.validateGuestPath(tab.guestPath)
-                    !host.isFile ||
-                        host.lastModified() != tab.savedLastModified ||
-                        host.length() != tab.savedSize
-                }.getOrDefault(false)
-            }
-            if (!changed) return@launch
-            if (tab.dirty && showBanner) {
-                showError(getString(R.string.editor_file_changed_on_disk))
-            } else if (!tab.dirty) {
-                reloadTabSilently(tab)
-            }
-        }
-    }
-
-    private suspend fun reloadTabSilently(tab: EditorTab) {
-        val loaded = withContext(Dispatchers.IO) { runCatching { fs.read(tab.guestPath) } }
-        loaded.onSuccess { file ->
-            tab.buffer = file.text
-            tab.savedLastModified = file.lastModifiedMs
-            tab.savedSize = file.sizeBytes
-            if (tabs.indexOf(tab) == activeIndex) setActiveTab(activeIndex) else renderTabs()
-        }
-    }
-
-    private fun refreshAll() {
-        refreshExplorer()
-        tabs.getOrNull(activeIndex)?.let { checkExternalChange(it, showBanner = true) }
-    }
-
-    // --------------------------------------------------------- unsaved guard
-
-    private fun confirmDiscardOrSaveAll() {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.editor_discard_changes_title)
-            .setMessage(R.string.editor_discard_changes_msg)
-            .setPositiveButton(R.string.editor_save_all) { _, _ ->
-                lifecycleScope.launch {
-                    val dirty = tabs.withIndex().filter { it.value.dirty }
-                    var allOk = true
-                    for ((index, _) in dirty) {
-                        val before = tabs.getOrNull(index) ?: continue
-                        if (index == activeIndex) before.buffer = binding.editorView.text.toString()
-                        val ok = withContext(Dispatchers.IO) {
-                            runCatching {
-                                fs.write(before.guestPath, before.buffer, force = true)
-                                true
-                            }.getOrDefault(false)
-                        }
-                        if (ok) before.dirty = false else allOk = false
-                    }
-                    renderTabs()
-                    if (allOk) {
-                        Toast.makeText(this@EditorActivity, R.string.editor_saved_all, Toast.LENGTH_SHORT).show()
-                        finish()
+        override fun onCreateWindow(
+            view: WebView,
+            isDialog: Boolean,
+            isUserGesture: Boolean,
+            resultMsg: Message
+        ): Boolean {
+            // target=_blank: capture the destination and route it through the
+            // same main-frame policy; the editor window itself never navigates.
+            val temp = WebView(view.context)
+            temp.webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(
+                    t: WebView,
+                    request: WebResourceRequest
+                ): Boolean {
+                    val url = request.url.toString()
+                    if (CodeServerSupport.isAllowedEditorUrl(url, port)) {
+                        webView?.loadUrl(url)
                     } else {
-                        showError(getString(R.string.editor_save_failed, getString(R.string.err_generic)))
+                        val decision = NoxsUrlGuard.check(url)
+                        if (decision is NoxsUrlGuard.Decision.Allowed) {
+                            openInWebWindow(decision.url)
+                        }
                     }
+                    return true
                 }
             }
-            .setNegativeButton(R.string.editor_discard) { _, _ -> finish() }
-            .setNeutralButton(R.string.action_cancel, null)
+            (resultMsg.obj as WebView.WebViewTransport).webView = temp
+            resultMsg.sendToTarget()
+            return true
+        }
+    }
+
+    private fun openInWebWindow(url: String) {
+        try {
+            val intent = Intent(this, WebWindowActivity::class.java)
+                .putExtra(WebWindowActivity.EXTRA_URL, url)
+            startActivity(intent)
+        } catch (e: Exception) {
+            NoxsLog.w(TAG, "web window open failed: ${e.message}")
+            Toast.makeText(this, R.string.err_generic, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // ---------------------------------------------------------------- menu
+
+    private fun showMenu(anchor: View) {
+        val menu = PopupMenu(this, anchor)
+        menu.menu.add(Menu.NONE, ITEM_RESTART, Menu.NONE, getString(R.string.editor_menu_restart))
+        menu.menu.add(Menu.NONE, ITEM_STOP, Menu.NONE, getString(R.string.editor_menu_stop))
+        menu.menu.add(Menu.NONE, ITEM_LOG, Menu.NONE, getString(R.string.editor_menu_log))
+        menu.setOnMenuItemClickListener { item: MenuItem ->
+            when (item.itemId) {
+                ITEM_RESTART -> {
+                    startFlow(restart = true)
+                    true
+                }
+                ITEM_STOP -> {
+                    stopServer()
+                    true
+                }
+                ITEM_LOG -> {
+                    showLogDialog()
+                    true
+                }
+                else -> false
+            }
+        }
+        menu.show()
+    }
+
+    private fun stopServer() {
+        lifecycleScope.launch {
+            setChip(Phase.CHECKING)
+            val result = manager.stop()
+            detachWebView()
+            ready = false
+            if (result.isSuccess) {
+                showPanel(visible = true)
+                setChip(Phase.STOPPED)
+                setPhaseText(getString(R.string.editor_phase_stopped))
+                binding.editorProgress.visibility = View.GONE
+                binding.statusDetail.text = getString(R.string.editor_stopped_hint)
+                binding.btnRetry.text = getString(R.string.editor_start)
+                binding.btnRetry.visibility = View.VISIBLE
+            } else {
+                fail(result.exceptionOrNull()?.message)
+            }
+        }
+    }
+
+    private fun showLogDialog() {
+        val lines = manager.logTailLines(60)
+        val text = if (lines.isEmpty()) {
+            getString(R.string.editor_log_empty)
+        } else {
+            lines.joinToString("\n")
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.editor_menu_log)
+            .setMessage(text)
+            .setPositiveButton(R.string.action_close, null)
             .show()
     }
 
-    // ------------------------------------------------------ open in terminal
+    // ------------------------------------------------------ install stream
+
+    private fun observeInstallLines() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                manager.installLines.collect { lines ->
+                    if (phaseVisible == Phase.INSTALLING && lines.isNotEmpty()) {
+                        binding.statusDetail.text =
+                            lines.takeLast(INSTALL_LINES_SHOWN).joinToString("\n")
+                    }
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------- open in terminal
 
     private fun openWorkspaceInTerminal() {
         if (openTerminalPending) return // debounce double taps
-        if (!fs.isDirectory(workspace)) {
+        val dirOk = CodeServerSupport.isValidGuestWorkspace(workspace) &&
+            runCatching { fs.isDirectory(workspace) }.getOrDefault(false)
+        if (!dirOk) {
             Toast.makeText(this, R.string.editor_open_terminal_missing, Toast.LENGTH_SHORT).show()
-            refreshExplorer()
             return
         }
         openTerminalPending = true
@@ -684,96 +485,70 @@ class EditorActivity : AppCompatActivity() {
         }
     }
 
-    // ------------------------------------------------------------- plumbing
+    // ------------------------------------------------------------ plumbing
 
-    private fun showError(message: String?) {
-        if (message == null) {
-            binding.editorError.visibility = View.GONE
-        } else {
-            binding.editorError.text = message
-            binding.editorError.visibility = View.VISIBLE
+    private fun resolveInitialWorkspace(savedInstanceState: Bundle?): String {
+        savedInstanceState?.getString(KEY_WORKSPACE)?.let { return it }
+        val requested = intent.getStringExtra(EXTRA_WORKSPACE)
+        val sessionCwd = RuntimeHolder.sessions?.sessions?.value?.firstOrNull()
+            ?.session?.emulator?.currentWorkingDirectory
+        val resolved = CodeServerSupport.resolveWorkspace(
+            requested = requested,
+            sessionCwd = sessionCwd,
+            fallbackHome = NoxsConstants.DEFAULT_USER_HOME,
+            isDirectory = { p ->
+                CodeServerSupport.isValidGuestWorkspace(p) &&
+                    runCatching { fs.isDirectory(p) }.getOrDefault(false)
+            }
+        )
+        if (resolved == null) {
+            Toast.makeText(this, R.string.editor_workspace_missing, Toast.LENGTH_LONG).show()
+            return NoxsConstants.DEFAULT_USER_HOME
         }
+        return resolved
     }
 
-    private fun renderStatus() {
-        val tab = tabs.getOrNull(activeIndex)
-        binding.editorStatus.text = when {
-            tab == null -> getString(R.string.editor_status_no_file)
-            tab.dirty -> tab.guestPath + " · " + getString(R.string.editor_status_dirty)
-            else -> tab.guestPath + " · " + getString(R.string.editor_status_saved)
+    private fun setChip(p: Phase) {
+        phaseVisible = p
+        val textRes = when (p) {
+            Phase.CHECKING -> R.string.editor_chip_checking
+            Phase.INSTALLING -> R.string.editor_chip_installing
+            Phase.STARTING -> R.string.editor_chip_starting
+            Phase.OPENING -> R.string.editor_chip_opening
+            Phase.READY -> R.string.editor_chip_ready
+            Phase.FAILED -> R.string.editor_chip_failed
+            Phase.STOPPED -> R.string.editor_chip_stopped
         }
+        val colorRes = when (p) {
+            Phase.READY -> R.color.noxs_ok
+            Phase.FAILED -> R.color.noxs_error
+            Phase.INSTALLING, Phase.STARTING, Phase.OPENING -> R.color.noxs_warning
+            Phase.CHECKING, Phase.STOPPED -> R.color.noxs_text_dim
+        }
+        binding.statusChip.text = getString(textRes)
+        binding.statusChip.setTextColor(getColor(colorRes))
     }
 
-    private suspend fun runFs(success: String, block: suspend () -> Unit) {
-        try {
-            block()
-            Toast.makeText(this, success, Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            showError(e.message ?: getString(R.string.err_generic))
-        }
+    private fun setPhaseText(text: String) {
+        binding.statusTitle.text = text
     }
 
-    /**
-     * Registers the bundled TextMate grammars + theme (once). Mirrors
-     * Squircle CE's LanguageInteractorImpl: assets file provider, recursive
-     * embedded-language registration, darcula token theme.
-     */
-    private suspend fun ensureLanguageEngine() {
-        if (engineReady) return
-        withContext(Dispatchers.IO) {
-            FileProviderRegistry.getInstance().addFileProvider(AssetsFileResolver(assets))
-
-            val raw = assets.open("languages.json").use { stream ->
-                stream.readBytes().toString(Charsets.UTF_8)
-            }
-            val arr = JSONArray(raw)
-            val byName = HashMap<String, GrammarEntry>()
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                val entry = GrammarEntry(
-                    name = obj.getString("name"),
-                    scopeName = obj.getString("scopeName"),
-                    grammar = obj.getString("grammar"),
-                    languageConfiguration = obj.optString("languageConfiguration", "")
-                )
-                val embedded = obj.optJSONObject("embeddedLanguages")
-                if (embedded != null) {
-                    for (key in embedded.keys()) {
-                        entry.embedded[key] = embedded.getString(key)
-                    }
-                }
-                byName[entry.name] = entry
-            }
-            val registered = HashSet<String>()
-            fun register(entry: GrammarEntry) {
-                if (!registered.add(entry.scopeName)) return
-                if (GrammarRegistry.getInstance().findGrammar(entry.scopeName) != null) return
-                val stream = FileProviderRegistry.getInstance().tryGetInputStream(entry.grammar)
-                    ?: return
-                val source = IGrammarSource.fromInputStream(stream, entry.grammar, Charsets.UTF_8)
-                val definition = DefaultGrammarDefinition.withLanguageConfiguration(
-                    source, entry.languageConfiguration, entry.name, entry.scopeName
-                ).withEmbeddedLanguages(entry.embedded)
-                GrammarRegistry.getInstance().loadGrammar(definition)
-                for (name in entry.embedded.values) {
-                    byName[name]?.let { register(it) }
-                }
-            }
-            for (entry in byName.toSortedMap().values) register(entry)
-
-            val themeStream = assets.open("themes/darcula.json")
-            ThemeRegistry.getInstance().loadTheme(
-                IThemeSource.fromInputStream(themeStream, "darcula.json", Charsets.UTF_8),
-                true
-            )
-        }
-        engineReady = true
+    private fun showPanel(visible: Boolean) {
+        binding.statusPanel.visibility = if (visible) View.VISIBLE else View.GONE
     }
 
     companion object {
+        private const val TAG = "NoxsEditor"
+        private const val KEY_WORKSPACE = "noxs.state.EDITOR_WORKSPACE"
+        private const val KEY_PORT = "noxs.state.EDITOR_PORT"
         private const val EXTRA_WORKSPACE = "noxs.extra.EDITOR_WORKSPACE"
-        private const val MAX_OPEN_TABS = 12
+        private const val MAX_LOGIN_ATTEMPTS = 5
+        private const val INSTALL_LINES_SHOWN = 8
+        private const val ITEM_RESTART = 1
+        private const val ITEM_STOP = 2
+        private const val ITEM_LOG = 3
 
+        /** Sidebar entry point (and any caller with a pre-resolved workspace). */
         fun open(context: android.content.Context, workspace: String? = null) {
             val intent = android.content.Intent(context, EditorActivity::class.java)
             workspace?.let { intent.putExtra(EXTRA_WORKSPACE, it) }

@@ -256,20 +256,4 @@ class NoxsEditorFilesystemTest {
         } catch (expected: NoxsEditorFilesystem.FilesystemException) {
         }
     }
-
-    // --------------------------------------------------------- scope mapping
-
-    @Test
-    fun `scope mapping covers the bundled languages`() {
-        setupRootfs()
-        assertEquals("source.python", fs.scopeFor("main.py"))
-        assertEquals("source.python", fs.scopeFor("MAIN.PY"))
-        assertEquals("source.kotlin", fs.scopeFor("build.gradle.kts"))
-        assertEquals("text.html.basic", fs.scopeFor("index.html"))
-        assertEquals("source.dockerfile", fs.scopeFor("Dockerfile"))
-        assertEquals("source.makefile", fs.scopeFor("Makefile"))
-        assertEquals("source.shell", fs.scopeFor("run.sh"))
-        assertNull(fs.scopeFor("data.unknownext"))
-        assertNull(fs.scopeFor("script.bat"))
-    }
 }

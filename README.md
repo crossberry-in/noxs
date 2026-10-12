@@ -124,36 +124,51 @@ search, a compact toolbar and a complete Settings → Terminal surface
 (Appearance / Interaction / Scrolling / Behavior / Advanced). All settings
 apply live — no shell restart. Details: [docs/TERMINAL-UX.md](docs/TERMINAL-UX.md).
 
-## NXEditor — code editor
+## Editor — VS Code in Noxs (code-server)
 
-NXEditor is a built-in native code editor (sidebar → **Editor**) powered by
-the same engine Squircle CE embeds: [sora-editor](https://github.com/Rosemoe/sora-editor)
-(`io.github.rosemoe:editor`, pinned to Squircle's `0.24.3`) with TextMate
-syntax highlighting for 24 languages (Python, JavaScript/TypeScript, Kotlin,
-Java, C/C++, Go, Rust, Shell, YAML, Markdown, HTML/CSS and more).
+The built-in editor (sidebar → **Editor**) is the real
+[code-server](https://github.com/coder/code-server) — VS Code in the
+browser — rendered in an Android WebView and served by the Noxs Linux
+guest on `127.0.0.1` only. The former native sora-editor screen was fully
+removed in favor of it.
 
 - **Workspace = your terminal.** The editor opens at the active terminal
   session's working directory, tracked live via OSC 7 shell integration
   (package system v11 refreshes the shell profile of existing environments
   automatically). `Editor` in the sidebar opens the current directory —
   no fixed paths anywhere.
-- **Real filesystem.** Read, save (with fsync), create, rename and delete
-  files and folders directly in the Debian rootfs; saved files are visible to
-  terminal commands immediately. All paths are validated and
-  canonicalized natively (no shell concatenation, no traversal, symlink
-  escapes rejected); outbound symlinks are never followed by deletes.
-- **Tabs + safety.** Up to 12 open files with unsaved-change markers, an
-  unsaved-changes guard on back navigation, external-change detection
-  (mtime/size) with reload/overwrite choice, and a 2 MB per-file editor cap.
-- **Open in Terminal.** One tap creates a NEW terminal session with `proot -w`
-  at the current workspace — existing sessions are never disturbed.
-- **Why native:** sora-editor is a native Android View and cannot render
-  inside the WebView-based Plugin Window, so NXEditor ships as a built-in
-  screen in the existing navigation (documented architectural decision).
+- **Everything VS Code does:** file explorer, editor tabs with unsaved-
+  change recovery, syntax highlighting, search & replace, the command
+  palette, integrated terminals, extensions and settings — served by the
+  actual code-server web app, not a re-implementation.
+- **One command to install.** The guest CLI handles the full lifecycle,
+  and the editor drives the same commands:
+  `noxs code install|start|stop|restart|status|logs` (`nx code …` is an
+  alias). Installation detects the guest architecture (Android ARM64 /
+  aarch64 → `linux-arm64`), verifies the sha256 checksum when upstream
+  publishes one, streams progress, survives interrupted downloads and
+  never reports false success — a release that cannot run in the guest
+  fails with a clear error. The install persists in guest storage and is
+  never repeated on every launch. No device root.
+- **Security.** The server binds to `127.0.0.1` only, authentication is
+  always on (`auth: password`, generated once, never printed to logs or
+  the terminal), the credential lives in a mode-600 config inside
+  app-private storage, and the editor WebView only navigates the local
+  server origin — external links open in Noxs' guarded web window.
+- **Open in Terminal.** One tap creates a NEW terminal session with
+  `proot -w` at the current workspace — existing sessions are never
+  disturbed.
+- **Runs as an ordinary guest process** (no systemd/init inside proot);
+  the foreground Noxs service keeps it alive while the app runs, and a
+  crash or app kill is detected via PID metadata and reported honestly.
 
-Attribution: grammar/theme assets are curated from
-[Squircle CE](https://github.com/massivemadness/Squircle-CE) (Apache-2.0);
-the sora-editor engine is LGPL-2.1. Both are credited in Settings → About.
+Details, WebView limitations and troubleshooting:
+[docs/CODE-SERVER.md](docs/CODE-SERVER.md).
+
+Attribution: code-server is MIT (Coder); the VS Code runtime it serves is
+MIT (Microsoft). Neither is bundled with the APK — both are downloaded at
+install time from their official releases. Credited in Settings → About
+and [NOTICE.md](NOTICE.md).
 
 ## Security posture
 
@@ -166,6 +181,6 @@ environment only. Details: [docs/SECURITY.md](docs/SECURITY.md) ·
 
 Apache-2.0 — original implementation, no third-party branding
 redistributed. Runtime artifacts (Debian rootfs, proot, code-server) are
-fetched from their official sources under their own licenses. Bundled
-editor components carry their own licenses: sora-editor (LGPL-2.1) and
-Squircle CE grammar/theme assets (Apache-2.0) — see NOTICE.md.
+fetched from their official sources under their own licenses. The editor's
+code-server and VS Code components are downloaded at install time under
+the MIT license — see NOTICE.md.

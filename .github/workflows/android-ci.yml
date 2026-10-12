@@ -103,7 +103,7 @@ jobs:
         run: |
           chmod +x scripts/*.sh linux-runtime/**/*.sh 2>/dev/null || true
           set -o pipefail
-          for suite in manifests sync-check scripts nx ai; do
+          for suite in manifests sync-check scripts nx ai code; do
             echo "=== suite: $suite ==="
             if scripts/test.sh "--$suite" 2>&1 | tee "validate-$suite.log"; then
               echo "SUITE $suite: PASS"

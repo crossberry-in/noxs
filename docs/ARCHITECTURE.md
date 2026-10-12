@@ -29,7 +29,7 @@
 │  │  │  │  user noxs (/home/noxs) + password sudo        │  │  │  │
 │  │  │  │  apt · bash · git · ssh · unix sockets         │  │  │  │
 │  │  │  │  /run and /var/run — real FHS runtime state    │  │  │  │
-│  │  │  │  code-server (opt-in, 127.0.0.1 only)          │  │  │  │
+│  │  │  │  code-server (Editor, 127.0.0.1 only)          │  │  │  │
 │  │  │  └────────────────────────────────────────────────┘  │  │  │
 │  │  └──────────────────────────────────────────────────────┘  │  │
 │  └────────────────────────────────────────────────────────────┘  │

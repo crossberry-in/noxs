@@ -257,42 +257,6 @@ class NoxsEditorFilesystem(private val rootfs: File) {
 
     // ------------------------------------------------------------- helpers
 
-    /**
-     * TextMate scope for the given file name — drives syntax highlighting
-     * for the bundled grammar set (null = plain text).
-     */
-    fun scopeFor(fileName: String): String? = when {
-        fileName == "Dockerfile" -> "source.dockerfile"
-        fileName == "Makefile" -> "source.makefile"
-        else -> when (fileName.substringAfterLast('.').lowercase()) {
-            "py", "pyw" -> "source.python"
-            "js", "mjs", "cjs" -> "source.js"
-            "jsx" -> "source.js"   // no dedicated jsx grammar — JS highlighting
-            "ts" -> "source.ts"
-            "tsx" -> "source.ts"   // no dedicated tsx grammar — TS highlighting
-            "json" -> "source.json"
-            "html", "htm" -> "text.html.basic"
-            "css" -> "source.css"
-            "xml", "svg", "xsl" -> "text.xml"
-            "yml", "yaml" -> "source.yaml"
-            "md", "markdown" -> "text.html.markdown"
-            "sh", "bash", "zsh" -> "source.shell"
-            "kt", "kts" -> "source.kotlin"
-            "java" -> "source.java"
-            "c", "h" -> "source.c"
-            "cpp", "cc", "cxx", "hpp", "hh" -> "source.cpp"
-            "go" -> "source.go"
-            "rs" -> "source.rust"
-            "sql" -> "source.sql"
-            "toml" -> "source.toml"
-            "ini", "cfg", "conf" -> "source.ini"
-            "rb" -> "source.ruby"
-            "php" -> "source.php"
-            "lua" -> "source.lua"
-            else -> null
-        }
-    }
-
     private fun File.invariantPath(): String =
         absolutePath.replace(File.separatorChar, '/').trimEnd('/').ifEmpty { "/" }
 }
