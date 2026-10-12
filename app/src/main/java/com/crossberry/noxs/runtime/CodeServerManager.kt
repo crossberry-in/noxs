@@ -181,7 +181,9 @@ class CodeServerManager(
             val start = if (bytes > LOG_TAIL_WINDOW) bytes - LOG_TAIL_WINDOW else 0
             java.io.RandomAccessFile(f, "r").use { raf ->
                 raf.seek(start)
-                raf.readBytes().toString(Charsets.UTF_8)
+                val buf = ByteArray((bytes - start).toInt())
+                raf.readFully(buf)
+                String(buf, Charsets.UTF_8)
             }
                 .lineSequence()
                 .filter { !it.contains("password", ignoreCase = true) }

@@ -135,8 +135,8 @@ code_http_ok() {
 }
 
 code_wait_ready() {
-    local addr="${'$'}1" timeout="${'$'}{2:-45}" i
-    for i in ${'$'}(seq 1 "${'$'}timeout"); do
+    local addr="${'$'}1" timeout="${'$'}{2:-45}"
+    for _ in ${'$'}(seq 1 "${'$'}timeout"); do
         if code_http_ok "${'$'}addr"; then return 0; fi
         code_running || return 1
         sleep 1
@@ -236,10 +236,10 @@ code_start() {
 
 code_stop() {
     if code_running; then
-        local pid i
+        local pid
         pid="${'$'}(cat "${'$'}CODE_PID")"
         kill "${'$'}pid" 2>/dev/null
-        for i in ${'$'}(seq 1 10); do
+        for _ in ${'$'}(seq 1 10); do
             kill -0 "${'$'}pid" 2>/dev/null || break
             sleep 1
         done
@@ -352,7 +352,8 @@ code_verify() {
     # ${'$'}1=archive  ${'$'}2=version  ${'$'}3=asset name. Verifies sha256 against the
     # release SHASUMS.txt when upstream publishes one; otherwise records the
     # digest of the archive we actually received.
-    local tar="${'$'}1" ver="${'$'}2" asset="${'$'}3" sums="${'$'}CODE_TMP/SHASUMS-${'$'}ver.txt" want got
+    local tar="${'$'}1" ver="${'$'}2" asset="${'$'}3" want got
+    local sums="${'$'}CODE_TMP/SHASUMS-${'$'}ver.txt"
     rm -f "${'$'}sums"
     if command -v curl >/dev/null 2>&1; then
         curl -fsSL --max-time 30 -o "${'$'}sums" \
@@ -420,7 +421,7 @@ code_install() {
         [ -n "${'$'}ver" ] || ver="${'$'}CODE_FALLBACK_VERSION"
     fi
     case "${'$'}ver" in
-        *[!0-9A-Za-z.\-]*)
+        *[!0-9A-Za-z.-]*)
             err "invalid version: refusing to install from an untrusted tag"
             return 1 ;;
     esac

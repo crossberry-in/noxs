@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2034
+# shellcheck disable=SC2034,SC2317
 # scripts/test-code-cli.sh — functional tests for the `noxs code` lifecycle.
 # Fully sandboxed: every path is env-overridden and code-server itself is a
 # stub (a python http.server), so no real download or install happens here
@@ -24,7 +24,7 @@ SBX="$(mktemp -d)"
 cleanup() {
     # stub servers announce themselves as "code-server -m http.server ..."
     pkill -f '^code-server -m http.server' 2>/dev/null
-    kill $(jobs -p) 2>/dev/null
+    jobs -p | xargs -r kill 2>/dev/null
     rm -rf "$SBX"
 }
 trap cleanup EXIT

@@ -119,7 +119,9 @@ class EditorActivity : AppCompatActivity() {
             // Activity recreation: reattach to the already-running server.
             serverPort = restoredPort
             attachWebView(restoredPort, autoLoad = false)
-            val restored = webView?.restoreState(savedInstanceState)
+            val restored = savedInstanceState?.let { bundle ->
+                webView?.restoreState(bundle)
+            }
             if (restored == null) {
                 webView?.loadUrl("http://127.0.0.1:$restoredPort/")
             }
