@@ -195,7 +195,9 @@ class CodeServerSupportTest {
         // character outside the base64 alphabet is filtered away
         val hostile = CodeServerSupport.loginInjectScript("');alert(1)//")
         val extracted = Regex("atob\\('([^']*)'\\)").find(hostile)?.groupValues?.get(1)
-        assertEquals("alert1", extracted)
+        // '/' is a legal base64 char, so it survives the filter — but every
+        // string-breaking character (quote, paren, semicolon) is gone
+        assertEquals("alert1//", extracted)
         assertTrue(extracted!!.all { it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' || it == '+' || it == '/' || it == '=' })
     }
 
