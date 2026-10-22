@@ -195,14 +195,16 @@ class NoxsWelcomeTest {
         val rc = temporary.newFile("bashrc").apply { writeText(bashrc) }
         val home = temporary.newFolder("home")
         val cmd = "env -i PATH=/usr/bin:/bin HOME=${home.absolutePath} $extraEnv " +
-            "bash --rcfile '${rc.absolutePath}' -i"
+            "bash --rcfile '${rc.absolutePath}' -i -c 'exit 0'"
+        // -c 'exit 0' makes the child's lifetime deterministic: util-linux
+        // versions differ on whether stdin EOF reaches the pty child (Debian
+        // closes the master, Ubuntu 24.04 leaves bash waiting for input
+        // forever). stdout is still the pty script(1) provides, so the
+        // [ -t 1 ] guard in the rcfile sees a real interactive session.
         val pb = ProcessBuilder(scriptBinary(), "-qec", cmd, "/dev/null")
         pb.redirectErrorStream(true)
-        // script's stdin must EOF immediately: an interactive bash exits when
-        // its input hits EOF. Gradle test workers inherit a stdin that never
-        // closes, which once left `readBytes()` blocking forever (the CI test
-        // task silently hung for 40 minutes). /dev/null makes the lifecycle
-        // deterministic on every runner.
+        // Keep script's stdin at a hard EOF too — belt and braces on top of
+        // the -c exit, so no runner flavor can wedge the pty either way.
         pb.redirectInput(File("/dev/null"))
         val proc = pb.start()
         // Drain on a daemon thread and bound the wait ourselves — a wedged
