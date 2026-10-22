@@ -33,6 +33,7 @@ import android.net.Uri
 import android.os.CancellationSignal
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
+import com.crossberry.noxs.shared.NoxsConstants
 import android.provider.DocumentsProvider
 import android.webkit.MimeTypeMap
 import java.io.File
@@ -96,29 +97,29 @@ class NoxsDocumentsProvider : DocumentsProvider() {
     private fun includeDocument(cursor: MatrixCursor, file: File, docId: String) {
         val isDir = file.isDirectory
         val flags = when {
-            isDir -> (Document.FLAG_SUPPORTS_WRITE or Document.FLAG_SUPPORTS_DELETE or
-                Document.FLAG_SUPPORTS_RENAME or Document.FLAG_SUPPORTS_CREATE)
-            else -> (Document.FLAG_SUPPORTS_WRITE or Document.FLAG_SUPPORTS_DELETE or
-                Document.FLAG_SUPPORTS_RENAME)
-        }.let { f -> if (file.canWrite()) f else Document.FLAG_SUPPORTS_DELETE }
+            isDir -> (DocumentsContract.Document.FLAG_SUPPORTS_WRITE or DocumentsContract.Document.FLAG_SUPPORTS_DELETE or
+                DocumentsContract.Document.FLAG_SUPPORTS_RENAME or DocumentsContract.Document.FLAG_SUPPORTS_CREATE)
+            else -> (DocumentsContract.Document.FLAG_SUPPORTS_WRITE or DocumentsContract.Document.FLAG_SUPPORTS_DELETE or
+                DocumentsContract.Document.FLAG_SUPPORTS_RENAME)
+        }.let { f -> if (file.canWrite()) f else DocumentsContract.Document.FLAG_SUPPORTS_DELETE }
         cursor.newRow().apply {
-            add(Document.COLUMN_DOCUMENT_ID, docId)
-            add(Document.COLUMN_DISPLAY_NAME, file.name.ifEmpty { NoxsDocumentsPolicy.ROOT_TITLE })
-            add(Document.COLUMN_MIME_TYPE, NoxsDocumentsPolicy.mimeFor(file.name, isDir, ::guessMime))
-            add(Document.COLUMN_LAST_MODIFIED, file.lastModified())
-            add(Document.COLUMN_SIZE, if (isDir) 0L else file.length())
-            add(Document.COLUMN_FLAGS, flags)
+            add(DocumentsContract.Document.COLUMN_DOCUMENT_ID, docId)
+            add(DocumentsContract.Document.COLUMN_DISPLAY_NAME, file.name.ifEmpty { NoxsDocumentsPolicy.ROOT_TITLE })
+            add(DocumentsContract.Document.COLUMN_MIME_TYPE, NoxsDocumentsPolicy.mimeFor(file.name, isDir, ::guessMime))
+            add(DocumentsContract.Document.COLUMN_LAST_MODIFIED, file.lastModified())
+            add(DocumentsContract.Document.COLUMN_SIZE, if (isDir) 0L else file.length())
+            add(DocumentsContract.Document.COLUMN_FLAGS, flags)
         }
     }
 
     private fun includeRoot(cursor: MatrixCursor) {
         cursor.newRow().apply {
-            add(Root.COLUMN_ROOT_ID, ROOT_ID)
-            add(Root.COLUMN_TITLE, NoxsDocumentsPolicy.ROOT_TITLE)
-            add(Root.COLUMN_SUMMARY, "Debian 12 guest files")
-            add(Root.COLUMN_DOCUMENT_ID, NoxsDocumentsPolicy.HOME_DOC)
-            add(Root.COLUMN_MIME_TYPES, "*/*")
-            add(Root.COLUMN_FLAGS, Root.FLAG_LOCAL_ONLY or Root.FLAG_SUPPORTS_IS_CHILD)
+            add(DocumentsContract.Root.COLUMN_ROOT_ID, ROOT_ID)
+            add(DocumentsContract.Root.COLUMN_TITLE, NoxsDocumentsPolicy.ROOT_TITLE)
+            add(DocumentsContract.Root.COLUMN_SUMMARY, "Debian 12 guest files")
+            add(DocumentsContract.Root.COLUMN_DOCUMENT_ID, NoxsDocumentsPolicy.HOME_DOC)
+            add(DocumentsContract.Root.COLUMN_MIME_TYPES, "*/*")
+            add(DocumentsContract.Root.COLUMN_FLAGS, DocumentsContract.Root.FLAG_LOCAL_ONLY or DocumentsContract.Root.FLAG_SUPPORTS_IS_CHILD)
         }
     }
 
@@ -197,7 +198,7 @@ class NoxsDocumentsProvider : DocumentsProvider() {
         } catch (e: NoxsDocumentsPolicy.PolicyException) {
             throw FileNotFoundException(e.message)
         }
-        if (mimeType == Document.MIME_TYPE_DIR) {
+        if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
             if (!target.mkdir()) throw FileNotFoundException("Cannot create directory")
         } else {
             if (!target.createNewFile()) throw FileNotFoundException("Cannot create document")
@@ -244,15 +245,15 @@ class NoxsDocumentsProvider : DocumentsProvider() {
 
         private fun resolveRootProjection(projection: Array<out String>?): Array<out String> =
             projection ?: arrayOf(
-                Root.COLUMN_ROOT_ID, Root.COLUMN_TITLE, Root.COLUMN_SUMMARY,
-                Root.COLUMN_DOCUMENT_ID, Root.COLUMN_MIME_TYPES, Root.COLUMN_FLAGS
+                DocumentsContract.Root.COLUMN_ROOT_ID, DocumentsContract.Root.COLUMN_TITLE, DocumentsContract.Root.COLUMN_SUMMARY,
+                DocumentsContract.Root.COLUMN_DOCUMENT_ID, DocumentsContract.Root.COLUMN_MIME_TYPES, DocumentsContract.Root.COLUMN_FLAGS
             )
 
         private fun resolveDocumentProjection(projection: Array<out String>?): Array<out String> =
             projection ?: arrayOf(
-                Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME,
-                Document.COLUMN_MIME_TYPE, Document.COLUMN_LAST_MODIFIED,
-                Document.COLUMN_SIZE, Document.COLUMN_FLAGS
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                DocumentsContract.Document.COLUMN_MIME_TYPE, DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+                DocumentsContract.Document.COLUMN_SIZE, DocumentsContract.Document.COLUMN_FLAGS
             )
     }
 }

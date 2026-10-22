@@ -55,14 +55,20 @@ object NoxsDocumentsPolicy {
             // half-installed environment exposes no root at all.
             throw PolicyException("Noxs home is unavailable")
         }
-        val p = file.invariantPath()
-        if (p != home.invariantPath() && !p.startsWith(home.invariantPath() + "/")) {
+        val p = inv(file)
+        val homePath = inv(home)
+        if (p != homePath && !p.startsWith(homePath + "/")) {
             // A symlink inside home may still resolve outside of home while
             // remaining inside the rootfs — the allowlist catches it here.
             throw PolicyException("Document escapes Noxs Linux Home")
         }
         return file
     }
+
+    /** Forward-slash invariant path of a canonical file (same rule the
+     *  editor filesystem uses; kept local — that helper is private). */
+    private fun inv(f: File): String =
+        f.absolutePath.replace(File.separatorChar, '/').trimEnd('/')
 
     /** True when [docId] is a valid, exposed directory document. */
     fun isExposedDirectory(fs: NoxsEditorFilesystem, docId: String): Boolean = try {
