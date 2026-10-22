@@ -112,31 +112,50 @@ class NoxsPaths(baseDir: File, val nativeLibDir: File? = null) {
         }
         val rootPath = root.path + File.separator
         var total = 0L
-        try {
-            root.walkBottomUp()
-                .onEnter { d ->
-                    // Descend only into directories that stay inside the
-                    // root once canonicalized (root itself passes).
-                    val c = runCatching { d.canonicalPath }.getOrNull()
-                    c != null && (c == root.path || c.startsWith(rootPath))
+        // Manual stack walk instead of FileTreeWalk: the field crash was an
+        // AssertionError raised inside FileTreeWalk's DirectoryState (root
+        // vanished between its isDirectory check and state construction).
+        // An explicit walk keeps every failure a handled branch instead of
+        // a stdlib assertion — the AssertionError class is impossible here.
+        val stack = ArrayDeque<File>()
+        stack.addLast(root)
+        while (stack.isNotEmpty()) {
+            val dir = stack.removeLast()
+            val children = try {
+                // null for unreadable directories (permission errors): skip
+                dir.listFiles()
+            } catch (e: Throwable) {
+                NoxsLog.w("Paths", "dirSize: skipping unreadable ${dir.path} (${e.javaClass.simpleName})")
+                null
+            } ?: continue
+            for (child in children) {
+                try {
+                    if (Files.isSymbolicLink(child.toPath())) {
+                        // Never follow links: guest-created symlinks must not
+                        // pull foreign storage into the figure (or explode it
+                        // via loops). Regular files reached without links are
+                        // what a usage widget wants to report anyway.
+                        continue
+                    }
+                    if (child.isDirectory) {
+                        // Belt-and-braces containment: a racing rename cannot
+                        // pull the walk outside the requested root.
+                        val cp = child.canonicalPath
+                        if (cp == root.path || cp.startsWith(rootPath)) stack.addLast(child)
+                        continue
+                    }
+                    if (child.isFile) {
+                        // length() is 0 for entries that vanished mid-walk;
+                        // the saturating add keeps a hostile tree from
+                        // overflowing the Long.
+                        val n = runCatching { child.length() }.getOrDefault(0L)
+                        total = if (n > 0 && total > Long.MAX_VALUE - n) Long.MAX_VALUE else total + n
+                    }
+                } catch (e: Throwable) {
+                    // Entries may vanish between listFiles() and the stat —
+                    // that is a normal race, not an error worth logging.
                 }
-                .onFail { d, e ->
-                    NoxsLog.w("Paths", "dirSize: skipping unreadable ${d.path} (${e.javaClass.simpleName})")
-                    OnFailResult.SKIP
-                }
-                .filter { it.isFile && !Files.isSymbolicLink(it.toPath()) }
-                .forEach { f ->
-                    // length() is 0 for entries that vanished mid-walk; the
-                    // saturating add keeps a hostile tree from overflowing.
-                    val n = runCatching { f.length() }.getOrDefault(0L)
-                    total = if (n > 0 && total > Long.MAX_VALUE - n) Long.MAX_VALUE else total + n
-                }
-        } catch (e: Throwable) {
-            // Throwable, not Exception: the field crash was an AssertionError
-            // from FileTreeWalk's internal require() — Errors bypass Exception
-            // handlers. A usage probe must never take the app down; the
-            // partial total up to the failure point is the honest answer.
-            NoxsLog.w("Paths", "dirSize: walk aborted for ${dir.path} — partial total kept (${e.javaClass.simpleName})")
+            }
         }
         return total
     }
