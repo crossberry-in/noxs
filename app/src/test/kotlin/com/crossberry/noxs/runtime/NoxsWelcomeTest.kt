@@ -89,7 +89,7 @@ class NoxsWelcomeTest {
         val drainErr = Thread { err = proc.errorStream.readBytes().toString(Charsets.UTF_8) }
         listOf(drainOut, drainErr).forEach { it.isDaemon = true; it.start() }
         if (!proc.waitFor(20, TimeUnit.SECONDS)) {
-            proc.toHandle().destroyForcibly()
+            proc.destroy(); proc.destroyForcibly()
             drainOut.join(5_000); drainErr.join(5_000)
             throw AssertionError("renderer did not exit within 20s; partial: ${out.take(400)}")
         }
@@ -218,8 +218,7 @@ class NoxsWelcomeTest {
         drain.start()
         val finished = proc.waitFor(30, TimeUnit.SECONDS)
         if (!finished) {
-            proc.toHandle().descendants().forEach { it.destroyForcibly() }
-            proc.toHandle().destroyForcibly()
+            proc.destroy(); proc.destroyForcibly()
             drain.join(5_000)
             throw AssertionError(
                 "interactive shell did not exit within 30s (script=${scriptBinary()}); " +
@@ -274,7 +273,7 @@ class NoxsWelcomeTest {
         drain.isDaemon = true
         drain.start()
         if (!proc.waitFor(30, TimeUnit.SECONDS)) {
-            proc.toHandle().destroyForcibly()
+            proc.destroy(); proc.destroyForcibly()
             drain.join(5_000)
             throw AssertionError("non-interactive shell did not exit within 30s; partial: ${out.take(400)}")
         }
