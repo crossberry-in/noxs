@@ -90,7 +90,7 @@ object NoxsDocumentsPolicy {
             .filter { it.code >= 0x20 && it.code != 0x7f }
             .trim()
             .ifEmpty { "untitled" }
-        val safe = if (cleaned.startsWith(".")) "_${cleaned}" else cleaned
+        val safe = if (cleaned.startsWith(".")) "_" + cleaned.substring(1) else cleaned
         if (safe == "." || safe == "..") throw PolicyException("Reserved name")
         return safe.take(255)
     }

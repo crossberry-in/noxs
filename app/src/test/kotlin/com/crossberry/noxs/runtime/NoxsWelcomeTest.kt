@@ -81,10 +81,20 @@ class NoxsWelcomeTest {
             envPairs.forEach { (k, v) -> put(k, v) }
         }
         pb.redirectErrorStream(false)
+        pb.redirectInput(File("/dev/null"))
         val proc = pb.start()
-        val out = proc.inputStream.readBytes().toString(Charsets.UTF_8)
-        assertTrue("renderer failed: ${String(proc.errorStream.readBytes())}", proc.waitFor(20, TimeUnit.SECONDS))
-        assertEquals(0, proc.exitValue())
+        var out = ""
+        var err = ""
+        val drainOut = Thread { out = proc.inputStream.readBytes().toString(Charsets.UTF_8) }
+        val drainErr = Thread { err = proc.errorStream.readBytes().toString(Charsets.UTF_8) }
+        listOf(drainOut, drainErr).forEach { it.isDaemon = true; it.start() }
+        if (!proc.waitFor(20, TimeUnit.SECONDS)) {
+            proc.toHandle().destroyForcibly()
+            drainOut.join(5_000); drainErr.join(5_000)
+            throw AssertionError("renderer did not exit within 20s; partial: ${out.take(400)}")
+        }
+        drainOut.join(5_000); drainErr.join(5_000)
+        assertTrue("renderer failed: $err", proc.exitValue() == 0)
         return out
     }
 
@@ -188,9 +198,35 @@ class NoxsWelcomeTest {
             "bash --rcfile '${rc.absolutePath}' -i"
         val pb = ProcessBuilder(scriptBinary(), "-qec", cmd, "/dev/null")
         pb.redirectErrorStream(true)
+        // script's stdin must EOF immediately: an interactive bash exits when
+        // its input hits EOF. Gradle test workers inherit a stdin that never
+        // closes, which once left `readBytes()` blocking forever (the CI test
+        // task silently hung for 40 minutes). /dev/null makes the lifecycle
+        // deterministic on every runner.
+        pb.redirectInput(File("/dev/null"))
         val proc = pb.start()
-        val out = proc.inputStream.readBytes().toString(Charsets.UTF_8)
-        proc.waitFor(30, TimeUnit.SECONDS)
+        // Drain on a daemon thread and bound the wait ourselves — a wedged
+        // pty must fail this test fast, never hang the executor.
+        var out = ""
+        val drain = Thread {
+            try {
+                out = proc.inputStream.readBytes().toString(Charsets.UTF_8)
+            } catch (_: java.io.IOException) {
+            }
+        }
+        drain.isDaemon = true
+        drain.start()
+        val finished = proc.waitFor(30, TimeUnit.SECONDS)
+        if (!finished) {
+            proc.toHandle().descendants().forEach { it.destroyForcibly() }
+            proc.toHandle().destroyForcibly()
+            drain.join(5_000)
+            throw AssertionError(
+                "interactive shell did not exit within 30s (script=${scriptBinary()}); " +
+                    "partial output: ${out.take(400)}"
+            )
+        }
+        drain.join(5_000)
         return out
     }
 
@@ -221,14 +257,28 @@ class NoxsWelcomeTest {
             "bash", "--rcfile", rc.absolutePath, "-i", "-c", "echo done-marker"
         )
         pb.redirectErrorStream(true)
+        pb.redirectInput(File("/dev/null"))
         pb.environment().apply {
             put("PATH", "/usr/bin:/bin")
             put("HOME", home.absolutePath)
             remove("NO_COLOR")
         }
         val proc = pb.start()
-        val out = proc.inputStream.readBytes().toString(Charsets.UTF_8)
-        proc.waitFor(30, TimeUnit.SECONDS)
+        var out = ""
+        val drain = Thread {
+            try {
+                out = proc.inputStream.readBytes().toString(Charsets.UTF_8)
+            } catch (_: java.io.IOException) {
+            }
+        }
+        drain.isDaemon = true
+        drain.start()
+        if (!proc.waitFor(30, TimeUnit.SECONDS)) {
+            proc.toHandle().destroyForcibly()
+            drain.join(5_000)
+            throw AssertionError("non-interactive shell did not exit within 30s; partial: ${out.take(400)}")
+        }
+        drain.join(5_000)
         assertTrue(out.contains("done-marker"))
         assertFalse("guard must block non-tty output", out.contains("Quick Start"))
     }
