@@ -37,6 +37,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.crossberry.noxs.NoxsApplication
 import com.crossberry.noxs.R
+import com.crossberry.noxs.shared.NoxsLog
 import com.crossberry.noxs.databinding.ActivityTerminalBinding
 import com.crossberry.noxs.runtime.AndroidProcSource
 import com.crossberry.noxs.runtime.NoxsActivityCenter

@@ -122,7 +122,7 @@ class NoxsPaths(baseDir: File, val nativeLibDir: File? = null) {
                 }
                 .onFail { d, e ->
                     NoxsLog.w("Paths", "dirSize: skipping unreadable ${d.path} (${e.javaClass.simpleName})")
-                    FileTreeWalk.OnFailResult.SKIP
+                    OnFailResult.SKIP
                 }
                 .filter { it.isFile && !Files.isSymbolicLink(it.toPath()) }
                 .forEach { f ->

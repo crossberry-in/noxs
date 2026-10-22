@@ -34,6 +34,7 @@ import android.os.CancellationSignal
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import com.crossberry.noxs.shared.NoxsConstants
+import com.crossberry.noxs.shared.NoxsLog
 import android.provider.DocumentsProvider
 import android.webkit.MimeTypeMap
 import java.io.File
@@ -98,7 +99,7 @@ class NoxsDocumentsProvider : DocumentsProvider() {
         val isDir = file.isDirectory
         val flags = when {
             isDir -> (DocumentsContract.Document.FLAG_SUPPORTS_WRITE or DocumentsContract.Document.FLAG_SUPPORTS_DELETE or
-                DocumentsContract.Document.FLAG_SUPPORTS_RENAME or DocumentsContract.Document.FLAG_SUPPORTS_CREATE)
+                DocumentsContract.Document.FLAG_SUPPORTS_RENAME or DocumentsContract.Document.FLAG_DIR_SUPPORTS_CREATE)
             else -> (DocumentsContract.Document.FLAG_SUPPORTS_WRITE or DocumentsContract.Document.FLAG_SUPPORTS_DELETE or
                 DocumentsContract.Document.FLAG_SUPPORTS_RENAME)
         }.let { f -> if (file.canWrite()) f else DocumentsContract.Document.FLAG_SUPPORTS_DELETE }
