@@ -7,6 +7,7 @@ package com.crossberry.noxs.ui
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.DocumentsContract
 import android.view.View
 import android.widget.Toast
 import androidx.activity.result.ActivityResult
@@ -17,6 +18,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.crossberry.noxs.R
 import com.crossberry.noxs.databinding.ActivityManagerBinding
+import com.crossberry.noxs.runtime.NoxsDocumentsPolicy
 import com.crossberry.noxs.runtime.NoxsPaths
 import com.crossberry.noxs.runtime.NoxsResources
 import com.crossberry.noxs.runtime.NoxsRuntimeFactory
@@ -68,6 +70,24 @@ class StorageActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         pendingCategory?.let { outState.putString(STATE_STORAGE_CATEGORY, it.key) }
         super.onSaveInstanceState(outState)
+    }
+
+    /** Launches the system document picker rooted at the Noxs Linux home
+     *  (DocumentsUI shows the NoxsDocumentsProvider root). Edits there write
+     *  through to the real guest filesystem. */
+    private fun openNoxsHomeInSystemFiles() {
+        try {
+            val initialUri = DocumentsContract.buildDocumentUri(
+                packageName + ".documents", NoxsDocumentsPolicy.HOME_DOC
+            )
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                putExtra(DocumentsContract.EXTRA_INITIAL_URI, initialUri)
+            }
+            startActivity(intent)
+        } catch (_: Exception) {
+            Toast.makeText(this, R.string.err_generic, Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun pickStorageTree(category: NoxsStorageBridge.Category) {
@@ -184,6 +204,13 @@ class StorageActivity : AppCompatActivity() {
                         title = "Reset Noxs SAF mappings",
                         subtitle = "Releases saved folder permissions only; never deletes Android documents",
                         onClick = { confirmSafReset() }
+                    )
+                )
+                add(
+                    TwoLineRow(
+                        title = getString(R.string.storage_open_noxs_files),
+                        subtitle = getString(R.string.storage_open_noxs_files_desc),
+                        onClick = { openNoxsHomeInSystemFiles() }
                     )
                 )
                 add(

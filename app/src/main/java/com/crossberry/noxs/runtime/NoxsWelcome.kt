@@ -89,8 +89,8 @@ noxs_welcome() {
     if [ -z "§{NO_COLOR:-}" ] && [ "§{TERM:-}" != "dumb" ]; then
         local E
         E=$(printf '\033')
-        _NX_G="${E}[1;32m" _NX_C="${E}[36m" _NX_D="${E}[2m"
-        _NX_B="${E}[1m" _NX_R="${E}[0m"
+        _NX_G="§{E}[1;32m" _NX_C="§{E}[36m" _NX_D="§{E}[2m"
+        _NX_B="§{E}[1m" _NX_R="§{E}[0m"
     fi
     # ---- borders: Unicode box, ASCII for dumb terminals --------------------
     local _NX_H _NX_V _NX_W TL TR BL BR SEP SEPR

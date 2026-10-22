@@ -161,6 +161,8 @@
     <string name="title_storage">Storage</string>
     <string name="storage_rootfs">Root filesystem</string>
     <string name="storage_apt_cache">APT package cache</string>
+    <string name="storage_open_noxs_files">Open Noxs Linux Home in Files</string>
+    <string name="storage_open_noxs_files_desc">Browse and edit guest files with Android\'s document picker (read/write)</string>
     <string name="storage_logs">App logs</string>
     <string name="storage_clear_cache">Clear APT cache</string>
     <string name="storage_reset">Reset Linux environment</string>

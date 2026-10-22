@@ -170,5 +170,25 @@
             android:name=".runtime.NoxsService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!--
+          Storage Access Framework provider: exposes ONLY the Noxs Linux home
+          (/home/noxs) to the system Files app and document pickers. The
+          visibility policy (home-only allowlist, traversal + symlink
+          rejection, name sanitization) lives in NoxsDocumentsPolicy; the
+          documents live in this app's own sandbox, so no storage permission
+          is needed. exported=true + MANAGE_DOCUMENTS are the platform's
+          standard documents-provider requirements (held by DocumentsUI).
+        -->
+        <provider
+            android:name=".runtime.NoxsDocumentsProvider"
+            android:authorities="${applicationId}.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
     </application>
 </manifest>

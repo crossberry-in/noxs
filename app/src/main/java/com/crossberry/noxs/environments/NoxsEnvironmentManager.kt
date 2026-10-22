@@ -204,6 +204,12 @@ class NoxsEnvironmentManager(private val context: Context) {
             runCatching { legacyPaths.installMarker.delete() }
         }
         taskManager.removeEnvironmentFiles(env)
+        // The usage widget walks the rootfs on a TTL cache — drop the stale
+        // figure immediately so the terminal never shows a removed
+        // environment's size (and never walks a half-deleted tree on fire).
+        // The size cache is process-wide (companion), so invalidating through
+        // the legacy instance clears every paths instance's entries.
+        legacyPaths.invalidateDirSizeCache()
         removeRecord(id)
         NoxsLog.i("EnvManager", "environment removed: $id")
         return true

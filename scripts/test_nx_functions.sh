@@ -35,7 +35,8 @@ for name, content, mirror in extract_nx.nx_shell_scripts(root):
               'VPN_LIB': 'noxs-pkg/vpn-lib.sh',
               'PLUG_LIB': 'noxs-pkg/plug-lib.sh',
               'CERT_FIX_LIB': 'noxs-pkg/cert-fix.sh',
-              'AI_LIB': 'noxs-pkg/ai-lib.sh'}[name]
+              'AI_LIB': 'noxs-pkg/ai-lib.sh',
+              'WELCOME_SH': 'launcher/noxs-welcome'}[name]
     target = dest / module
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content)

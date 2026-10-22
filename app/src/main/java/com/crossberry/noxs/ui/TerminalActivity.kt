@@ -1062,7 +1062,14 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
 
     private suspend fun refreshStatus() {
         val r = resources ?: return
-        val usage = withContext(Dispatchers.IO) { r.currentUsage() }
+        // A usage probe must never take the terminal down (the field crash
+        // came from exactly this path): degrade the widget instead.
+        val usage = try {
+            withContext(Dispatchers.IO) { r.currentUsage() }
+        } catch (e: Throwable) {
+            NoxsLog.w("Terminal", "resource refresh failed — widget keeps last values (${e.javaClass.simpleName})")
+            return
+        }
         binding.statusCpu.text = getString(R.string.status_cpu, "%.0f".format(usage.cpuPercent))
         binding.statusMem.text = getString(R.string.status_mem, usage.memMb.toString(), usage.totalMemMb.toString())
         binding.statusStorage.text = getString(R.string.status_storage, usage.storageUsedMb.toString())
