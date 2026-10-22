@@ -272,7 +272,7 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
             return
         }
         sessionManager = mgr
-        mgr.createSession("editor", loginAsRoot = false, showFirstRunWelcome = false, cwd = cwd)
+        mgr.createSession("editor", loginAsRoot = false, cwd = cwd)
             .onSuccess { entry ->
                 current = entry
                 attachCurrent()
@@ -367,13 +367,8 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
             return
         }
         sessionManager = mgr
-        val prefs = getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
-        val showWelcome = !prefs.getBoolean(PREF_FIRST_SHELL_WELCOME_SHOWN, false)
-        mgr.createSession("", loginAsRoot = root, showFirstRunWelcome = showWelcome)
+        mgr.createSession("", loginAsRoot = root)
             .onSuccess { entry ->
-                if (showWelcome) {
-                    prefs.edit().putBoolean(PREF_FIRST_SHELL_WELCOME_SHOWN, true).apply()
-                }
                 current = entry
                 attachCurrent()
                 binding.drawer.closeDrawer(GravityCompat.START)
@@ -422,6 +417,12 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
     private fun toggleFullscreen() {
         fullscreenMode = !fullscreenMode
         applyFullscreenUi()
+        // Persist the live toggle so activity recreation (rotation, process
+        // death) restores the user's last chrome state; Ctrl+F "Start in full
+        // screen" setting and this toggle share the same key by design.
+        terminalSettings = TerminalSettingsStore.putBoolean(
+            AndroidTerminalPrefs.from(this), "terminal.startFullscreen", fullscreenMode
+        )
         Toast.makeText(
             this,
             if (fullscreenMode) R.string.terminal_fullscreen_enter else R.string.terminal_fullscreen_exit,
@@ -435,11 +436,13 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
         binding.statsExpanded.visibility =
             if (!fullscreenMode && statsRowExpanded) View.VISIBLE else View.GONE
         binding.sessionTabsScroll.visibility = chrome
-        // Full screen always hides the action toolbar; normal mode restores it
-        // exactly when the user enabled it in settings.
+        // Full screen always hides the action toolbar and the shortcut-key
+        // row; normal mode restores both exactly as the user set them in
+        // settings (terminal.showToolbar / terminal.showExtraKeys).
         binding.actionsScroll.visibility =
             if (!fullscreenMode && terminalSettings.showToolbar) View.VISIBLE else View.GONE
-        binding.extraKeys.visibility = chrome
+        binding.extraKeys.visibility =
+            if (!fullscreenMode && terminalSettings.showExtraKeys) View.VISIBLE else View.GONE
         WindowCompat.setDecorFitsSystemWindows(window, !fullscreenMode)
         val controller = WindowInsetsControllerCompat(window, binding.root)
         if (fullscreenMode) {
@@ -480,6 +483,8 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
         }
         binding.actionsScroll.visibility =
             if (terminalSettings.showToolbar) View.VISIBLE else View.GONE
+        binding.extraKeys.visibility =
+            if (terminalSettings.showExtraKeys) View.VISIBLE else View.GONE
         current?.session?.let { runCatching { it.emulator.setScrollbackLimit(terminalSettings.scrollbackLines) } }
     }
 
@@ -511,7 +516,13 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
         popup.menu.add(0, MORE_FONT_DECR, 9, getString(R.string.terminal_font_decrease))
         popup.menu.add(0, MORE_RESET_FONT, 10, getString(R.string.terminal_menu_reset_font))
         popup.menu.add(0, MORE_SAVE_OUTPUT, 11, getString(R.string.terminal_menu_save_output))
-        popup.menu.add(0, MORE_TOGGLE_FULLSCREEN, 12, getString(R.string.terminal_menu_fullscreen))
+        popup.menu.add(
+            0, MORE_TOGGLE_FULLSCREEN, 12,
+            getString(
+                if (fullscreenMode) R.string.terminal_menu_fullscreen_exit
+                else R.string.terminal_menu_fullscreen
+            )
+        )
         popup.menu.add(0, MORE_SESSION_SETTINGS, 13, getString(R.string.terminal_menu_session_settings))
         popup.menu.add(0, MORE_SERVICES, 14, getString(R.string.nav_services))
         popup.menu.add(0, MORE_PROCESSES, 15, getString(R.string.nav_processes))
@@ -1246,7 +1257,6 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
         const val STATE_STORAGE_REQUEST_ID = "storage_request_id"
         const val STATE_STORAGE_CATEGORY = "storage_category"
         const val PREFS_SETTINGS = "noxs_settings"
-        const val PREF_FIRST_SHELL_WELCOME_SHOWN = "first_shell_welcome_shown"
         const val PREF_HEADER_STATS = "header_stats"
         const val WEBSITE_URL = "https://crossberry.vercel.app"
         const val SUPPORT_EMAIL = "mailto:crossberryweb@gmail.com"

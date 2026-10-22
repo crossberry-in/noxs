@@ -213,6 +213,12 @@ class TerminalSettingsSubActivity : AppCompatActivity() {
             getString(R.string.settings_show_toolbar_desc),
             s.showToolbar
         ) { checked -> TerminalSettingsStore.putBoolean(prefs, "terminal.showToolbar", checked) })
+        stack.addView(w.switchRow(
+            this,
+            getString(R.string.settings_show_shortcut_keys),
+            getString(R.string.settings_show_shortcut_keys_desc),
+            s.showExtraKeys
+        ) { checked -> TerminalSettingsStore.putBoolean(prefs, "terminal.showExtraKeys", checked) })
     }
 
     private fun renderScrolling(stack: LinearLayout, s: TerminalSettings) {

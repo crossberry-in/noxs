@@ -43,6 +43,7 @@ class TerminalSettingsTest {
         assertTrue(s.pinchZoom)
         assertFalse(s.twoFingerScroll)                       // optional gesture
         assertTrue(s.showToolbar)
+        assertTrue(s.showExtraKeys)                       // shortcut row visible by default
         assertTrue(s.keepAlive)
         assertFalse(s.confirmExit)                           // no unneeded dialogs
         assertEquals(TerminalThemePref.NOXS_DARK, s.theme)
@@ -153,6 +154,21 @@ class TerminalSettingsTest {
     }
 
     // ---- reset contract (spec 25) ----
+
+    @Test
+    fun `show shortcut keys defaults on and round-trips`() {
+        val prefs = InMemoryTerminalPrefs()
+        val saved = TerminalSettingsStore.putBoolean(prefs, "terminal.showExtraKeys", false)
+        assertFalse(saved.showExtraKeys)
+        assertFalse(TerminalSettingsStore.load(prefs).showExtraKeys)
+        assertTrue(TerminalSettingsStore.load(prefs).showToolbar)   // independent key
+        // A second save must not resurrect or leak it.
+        TerminalSettingsStore.save(prefs, saved)
+        assertFalse(TerminalSettingsStore.load(prefs).showExtraKeys)
+        // Reset restores the default (visible).
+        TerminalSettingsStore.reset(prefs)
+        assertTrue(TerminalSettingsStore.load(prefs).showExtraKeys)
+    }
 
     @Test
     fun `reset removes only terminal keys`() {

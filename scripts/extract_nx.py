@@ -27,6 +27,7 @@ SHELL_CONSTANTS = {
     "PLUG_LIB": ("NoxsNxPlugLib.kt", "linux-runtime/nx/plug-lib.sh"),
     "CERT_FIX_LIB": ("NoxsNxCertFix.kt", "linux-runtime/nx/cert-fix.sh"),
     "AI_LIB": ("NoxsNxAiLib.kt", "linux-runtime/nx/ai-lib.sh"),
+    "WELCOME_SH": ("NoxsWelcome.kt", "linux-runtime/launcher/noxs-welcome"),
 }
 
 WORKFLOW_FILE = "NoxsNxWorkflow.kt"

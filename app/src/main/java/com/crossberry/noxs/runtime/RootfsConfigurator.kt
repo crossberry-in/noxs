@@ -83,6 +83,10 @@ object RootfsConfigurator {
         writeFile(File(rootfs, "etc/profile.d/noxs-pkg-guard.sh"), NOXS_PKG_GUARD_SH)
         File(rootfs, "etc/profile.d/noxs-pkg-guard.sh").setExecutable(false)
 
+        // --- /usr/local/lib/noxs-welcome.sh (interactive welcome dashboard) ---
+        installWelcomeLib(rootfs)
+
+
         // --- /etc/environment ---
         writeFile(File(rootfs, "etc/environment"), ENVIRONMENT)
 
@@ -269,6 +273,13 @@ object RootfsConfigurator {
         refreshShellIntegration(paths)
     }
 
+    /** Writes the interactive welcome dashboard renderer (idempotent). */
+    private fun installWelcomeLib(rootfs: File) {
+        val lib = File(rootfs, "usr/local/lib/noxs-welcome.sh")
+        writeFile(lib, NoxsWelcome.WELCOME_SH)
+        lib.setExecutable(true, false)
+    }
+
     /**
      * Migration helper: rewrites /etc/profile.d/noxs.sh wholesale and replaces
      * the appended "Noxs interactive shell setup" block (marker to EOF) in the
@@ -282,6 +293,7 @@ object RootfsConfigurator {
             val rootfs = paths.rootfs
             writeFile(File(rootfs, "etc/profile.d/noxs.sh"), noxsProfile("android"))
             File(rootfs, "etc/profile.d/noxs.sh").setExecutable(false)
+            installWelcomeLib(rootfs)
             val marker = "# --- Noxs interactive shell setup ---"
             val snippet = bashrcSnippet("android", "Noxs Debian 12 (bookworm)", "sudo apt update")
             listOf(
@@ -322,8 +334,14 @@ object RootfsConfigurator {
     //    both profile.d/noxs.sh and the bashrc snippets) so the app tracks
     //    the shell working directory for the NXEditor workspace detection;
     //    migration rewrites profile.d/noxs.sh and replaces the bashrc blocks.
+    // 12: welcome dashboard — installs /usr/local/lib/noxs-welcome.sh and
+    //    replaces the plain two-line bashrc banner with a guarded source of
+    //    the renderer: new interactive sessions only, real system facts
+    //    (os-release, uname, user), NO_COLOR/narrow fallbacks; migration
+    //    installs the lib and rewrites the bashrc blocks in existing
+    //    environments without a reinstall.
     // internal: asserted from unit tests (NoxsNxAiTest migration marker check)
-    internal val NX_PACKAGE_SYSTEM_VERSION = "11"
+    internal val NX_PACKAGE_SYSTEM_VERSION = "12"
 
     /** Guest lib files removed by a migration version — deleted on update. */
     private val RETIRED_LIB_FILES = listOf("env-lib.sh")
@@ -742,10 +760,14 @@ object RootfsConfigurator {
         # OSC 7 reports the working directory for the Noxs app (NXEditor).
         export PS0=${'$'}'\033]133;C\a'
         PROMPT_COMMAND='printf "\033]133;A\007\033]7;file://%s\007" "${'$'}{PWD// /%20}"'
-        if [ -z "${'$'}{NOXS_BANNER_SHOWN:-}" ] && [ -t 1 ]; then
+        # Welcome dashboard: rendered by /usr/local/lib/noxs-welcome.sh. The
+        # guard keeps it to NEW INTERACTIVE sessions only — never one-shot
+        # commands, scripts or non-tty output — and never twice per session
+        # tree (NOXS_BANNER_SHOWN is inherited by child shells).
+        if [ -z "${'$'}{NOXS_BANNER_SHOWN:-}" ] && [ -t 1 ] && [ -r /usr/local/lib/noxs-welcome.sh ]; then
             export NOXS_BANNER_SHOWN=1
-            printf '\033[1;32m$banner\033[0m — %s (%s)\n' "${'$'}(uname -sr 2>/dev/null || echo Linux)" "${'$'}(uname -m 2>/dev/null || echo arm64)"
-            printf 'Type \033[1;36mnoxs help\033[0m, \033[1;36mls -la\033[0m, or \033[1;36m$hint\033[0m.\n\n'
+            . /usr/local/lib/noxs-welcome.sh
+            noxs_welcome
         fi
     """.trimIndent()
 

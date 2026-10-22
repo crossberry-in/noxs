@@ -105,7 +105,8 @@ class TerminalSettingsActivity : AppCompatActivity() {
 
     private fun interactionSummary(s: TerminalSettings): String = listOf(
         getString(if (s.pinchZoom) R.string.settings_state_on else R.string.settings_state_off, "Pinch"),
-        getString(if (s.showToolbar) R.string.settings_state_on else R.string.settings_state_off, "Toolbar")
+        getString(if (s.showToolbar) R.string.settings_state_on else R.string.settings_state_off, "Toolbar"),
+        getString(if (s.showExtraKeys) R.string.settings_state_on else R.string.settings_state_off, "Shortcuts")
     ).joinToString(" · ")
 
     private fun scrollSummary(s: TerminalSettings): String =

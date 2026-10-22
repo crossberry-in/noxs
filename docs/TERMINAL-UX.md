@@ -109,7 +109,9 @@ live:
   (200–1500 ms), cursor width (1–4), padding (0–24 dp), opacity (50–100%),
   theme (Noxs Dark / Black / High contrast / Paper).
 * **Interaction** — pinch zoom, two-finger scrolling, long-press selection,
-  auto-scroll selection, haptic feedback, toolbar visibility.
+  auto-scroll selection, haptic feedback, toolbar visibility, shortcut-key
+  row visibility (`Show shortcut keys` — the ESC/TAB/CTRL/arrows bar above
+  the keyboard).
 * **Scrolling** — scroll mode, follow live output, new-output indicator,
   auto-follow while running, scrollback size.
 * **Behavior** — confirm exit (off by default), keep sessions alive in
@@ -128,15 +130,25 @@ live:
 `terminal.opacity`, `terminal.theme`, `terminal.pinchZoom`,
 `terminal.twoFingerScroll`, `terminal.selectionEnabled`,
 `terminal.autoScrollSelection`, `terminal.hapticFeedback`,
-`terminal.showToolbar`, `terminal.scrollMode`, `terminal.followLiveOutput`,
-`terminal.showNewOutputIndicator`, `terminal.autoFollowWhileRunning`,
-`terminal.scrollbackLines`, `terminal.confirmExit`, `terminal.keepAlive`,
-`terminal.restoreSessions`, `terminal.autoFocusTerminal`,
-`terminal.preserveScrollPosition`, `terminal.reduceAnimations`,
-`terminal.textAntialias`, `terminal.debugOverlay`.
+`terminal.showToolbar`, `terminal.showExtraKeys`, `terminal.scrollMode`,
+`terminal.followLiveOutput`, `terminal.showNewOutputIndicator`,
+`terminal.autoFollowWhileRunning`, `terminal.scrollbackLines`,
+`terminal.confirmExit`, `terminal.keepAlive`, `terminal.restoreSessions`,
+`terminal.autoFocusTerminal`, `terminal.preserveScrollPosition`,
+`terminal.reduceAnimations`, `terminal.textAntialias`, `terminal.debugOverlay`.
 
 Values are clamped at load and save; invalid stored values can never reach
 the terminal.
+
+## Full screen
+
+Ctrl+F (or the toolbar menu's `Full screen` / `Exit full screen`) toggles an
+immersive terminal: the status bar, session tabs, action toolbar AND the
+shortcut-key row are hidden, system bars hide (swipe to reveal transiently),
+and the terminal takes the full viewport. The state persists in
+`terminal.startFullscreen` — the same key as the `Start in full screen`
+setting — so rotation and process death restore the last chrome state.
+Sessions are never restarted by the toggle; the shell keeps running.
 
 ## Performance notes
 

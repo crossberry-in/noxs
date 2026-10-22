@@ -83,6 +83,8 @@ data class TerminalSettings(
     val autoScrollSelection: Boolean = true,
     val hapticFeedback: Boolean = false,
     val showToolbar: Boolean = true,
+    /** Bottom shortcut-key row (ESC/TAB/CTRL/arrows…): user-toggleable. */
+    val showExtraKeys: Boolean = true,
     // Scrolling
     val scrollMode: ScrollModePref = ScrollModePref.SMART,
     val followLiveOutput: Boolean = true,
@@ -177,6 +179,7 @@ object TerminalSettingsStore {
     private const val K_AUTO_SCROLL_SELECTION = "terminal.autoScrollSelection"
     private const val K_HAPTIC_FEEDBACK = "terminal.hapticFeedback"
     private const val K_SHOW_TOOLBAR = "terminal.showToolbar"
+    private const val K_SHOW_EXTRA_KEYS = "terminal.showExtraKeys"
     private const val K_SCROLL_MODE = "terminal.scrollMode"
     private const val K_FOLLOW_LIVE_OUTPUT = "terminal.followLiveOutput"
     private const val K_SHOW_NEW_OUTPUT_INDICATOR = "terminal.showNewOutputIndicator"
@@ -219,6 +222,7 @@ object TerminalSettingsStore {
             autoScrollSelection = prefs.getBoolean(K_AUTO_SCROLL_SELECTION, d.autoScrollSelection),
             hapticFeedback = prefs.getBoolean(K_HAPTIC_FEEDBACK, d.hapticFeedback),
             showToolbar = prefs.getBoolean(K_SHOW_TOOLBAR, d.showToolbar),
+            showExtraKeys = prefs.getBoolean(K_SHOW_EXTRA_KEYS, d.showExtraKeys),
             scrollMode = ScrollModePref.byKey(prefs.getString(K_SCROLL_MODE, d.scrollMode.key)),
             followLiveOutput = prefs.getBoolean(K_FOLLOW_LIVE_OUTPUT, d.followLiveOutput),
             showNewOutputIndicator = prefs.getBoolean(K_SHOW_NEW_OUTPUT_INDICATOR, d.showNewOutputIndicator),
@@ -255,6 +259,7 @@ object TerminalSettingsStore {
         prefs.putBoolean(K_AUTO_SCROLL_SELECTION, s.autoScrollSelection)
         prefs.putBoolean(K_HAPTIC_FEEDBACK, s.hapticFeedback)
         prefs.putBoolean(K_SHOW_TOOLBAR, s.showToolbar)
+        prefs.putBoolean(K_SHOW_EXTRA_KEYS, s.showExtraKeys)
         prefs.putString(K_SCROLL_MODE, s.scrollMode.key)
         prefs.putBoolean(K_FOLLOW_LIVE_OUTPUT, s.followLiveOutput)
         prefs.putBoolean(K_SHOW_NEW_OUTPUT_INDICATOR, s.showNewOutputIndicator)

@@ -46,7 +46,6 @@ class NoxsSessionManager(
     fun createSession(
         label: String,
         loginAsRoot: Boolean = false,
-        showFirstRunWelcome: Boolean = false,
         cwd: String? = null
     ): Result<Entry> {
         if (_sessions.value.size >= quota.maxSessions) {
@@ -70,9 +69,11 @@ class NoxsSessionManager(
         // Write immediate header into the emulator buffer so the terminal view
         // is never blank while proot initializes the Debian userspace.
         val userTag = if (loginAsRoot) "root@noxs" else "noxs@android"
+        // Session header only — the welcome dashboard is rendered by the
+        // guest shell (/usr/local/lib/noxs-welcome.sh) with REAL system facts,
+        // once per interactive session (NOXS_BANNER_SHOWN guard in bashrc).
         val header = "\u001b[1;32m● Noxs Linux\u001b[0m — session \u001b[1m$name\u001b[0m ($userTag)\r\n"
-        val welcome = if (showFirstRunWelcome) firstRunWelcome() else ""
-        session.emulator.write((header + welcome).toByteArray(Charsets.UTF_8))
+        session.emulator.write(header.toByteArray(Charsets.UTF_8))
 
         val sessionEnvironment = mutableMapOf("NOXS_SESSION_LABEL" to name)
         if (loginAsRoot) sessionEnvironment["NOXS_ROOT_LOGIN"] = "1"
@@ -122,13 +123,6 @@ class NoxsSessionManager(
         }
     }
 
-    private fun firstRunWelcome(): String = buildString {
-        append("\r\nWelcome to Noxs by CrossberryWeb!\r\n\r\n")
-        append("For help, feedback, or support:\r\n")
-        append("Website: \u001b]8;;https://crossberry.vercel.app\u001b\\crossberry.vercel.app\u001b]8;;\u001b\\\r\n")
-        append("Email: \u001b]8;;mailto:crossberryweb@gmail.com\u001b\\crossberryweb@gmail.com\u001b]8;;\u001b\\\r\n\r\n")
-        append("Thank you for using Noxs.\r\n\r\n")
-    }
 
     private fun startFallbackSession(failedEntry: Entry, exitCode: Int) {
         val shBin = listOf("/system/bin/sh", "/bin/sh").firstOrNull { File(it).canExecute() } ?: return

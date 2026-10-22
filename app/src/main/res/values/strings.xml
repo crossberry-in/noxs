@@ -268,6 +268,7 @@
     <string name="terminal_menu_save_output">Save / share output</string>
     <string name="terminal_menu_reset_font">Reset font size</string>
     <string name="terminal_menu_fullscreen">Full screen (Ctrl+F)</string>
+    <string name="terminal_menu_fullscreen_exit">Exit full screen (Ctrl+F)</string>
     <string name="terminal_fullscreen_enter">Full screen — press Ctrl+F to exit</string>
     <string name="terminal_fullscreen_exit">Full screen off</string>
     <string name="terminal_exit_title">Leave Noxs?</string>
@@ -345,6 +346,8 @@
     <string name="settings_haptic_feedback_desc">Vibrate on selection and zoom</string>
     <string name="settings_show_toolbar">Show terminal toolbar</string>
     <string name="settings_show_toolbar_desc">Compact scroll, clipboard, search and font bar</string>
+    <string name="settings_show_shortcut_keys">Show shortcut keys</string>
+    <string name="settings_show_shortcut_keys_desc">ESC, TAB, CTRL, ALT, arrows and paging keys above the keyboard</string>
     <string name="settings_scroll_mode">Scroll mode</string>
     <string name="settings_scroll_mode_desc">Smart follows output; History Mirror reports distance</string>
     <string name="settings_follow_live_output">Follow live output</string>
