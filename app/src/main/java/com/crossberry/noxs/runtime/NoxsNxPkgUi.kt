@@ -133,6 +133,8 @@ progress_render() {
     local label="§1" done_b="§2" total_b="§3" elapsed="§4"
     local calc pct spd eta line pad
     calc=§(progress_calc "§done_b" "§total_b" "§elapsed")
+    # word splitting on "pct spd eta" is intentional
+    # shellcheck disable=SC2086
     set -- §calc
     pct="§1"; spd="§2"; eta="§3"
     line="§label"

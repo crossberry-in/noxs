@@ -295,7 +295,7 @@ pkgm_search_cmd() {
         case "$1" in
             --json)  NOXS_PKG_JSON=1 ;;
             -h|--help) printf 'usage: nx pkg search <name> [--json]\n'; return 0 ;;
-            *) [ -z "$q" ] && q="$1" || { err "unexpected argument: $1"; return 2; } ;;
+            *) if [ -z "$q" ]; then q="$1"; else err "unexpected argument: $1"; return 2; fi ;;
         esac
         shift
     done
@@ -458,7 +458,7 @@ pkgm_install_cmd() {
             -y|--yes) assume=1 ;;
             --json)   NOXS_PKG_JSON=1; ui_init ;;
             -h|--help) printf 'usage: nx pkg install <name> [-y] [--json]\n'; return 0 ;;
-            *) [ -z "$name" ] && name="$1" || { err "unexpected argument: $1"; return 2; } ;;
+            *) if [ -z "$name" ]; then name="$1"; else err "unexpected argument: $1"; return 2; fi ;;
         esac
         shift
     done
@@ -573,7 +573,7 @@ pkgm_install_debian() { # NAME SRC VER — native APT path, real progress.
         [ -n "$line" ] || continue
         case "$line" in "'"*) ;; *) continue ;; esac
         pkgm_parse_uri "$line"
-        [ -n "$PU_URL" ] && [ -n "$PU_SHA" ] || continue
+        if [ -z "$PU_URL" ] || [ -z "$PU_SHA" ]; then continue; fi
         valid_sha256 "$PU_SHA" || continue
         U_URL+=("$PU_URL"); U_FILE+=("$PU_FILE"); U_SIZE+=("${PU_SIZE:-0}")
         U_SHA+=("$PU_SHA"); U_NAME+=("$PU_NAME")
