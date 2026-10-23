@@ -258,4 +258,4 @@ cleaned). **User workspace files are never touched by any recovery.**
 - The former native editor stack (sora-editor LGPL-2.1, Squircle CE
   grammar assets Apache-2.0) was removed in v0.15.0.
 
-See [NOTICE.md](../NOTICE.md) and Settings → About.
+See [NOTICE.md](https://github.com/crossberry-in/noxs/blob/main/NOTICE.md) and Settings → About.

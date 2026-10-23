@@ -1,0 +1,108 @@
+# Noxs documentation — Material for MkDocs (Material Design UI + Material Icons)
+# Deployed to GitHub Pages by .github/workflows/docs.yml
+
+site_name: Noxs Docs
+site_description: >-
+  Noxs — a Debian-optimized Linux environment for Android. A real Debian 12
+  userspace with APT, sudo, Unix sockets and a real terminal, inside the
+  Android app sandbox. A small Linux computer in your pocket.
+site_url: https://crossberry-in.github.io/noxs/
+repo_url: https://github.com/crossberry-in/noxs
+repo_name: crossberry-in/noxs
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  logo: material/console
+  favicon: assets/images/favicon.svg
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    # Material Design light / dark schemes with automatic + manual toggle
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: white
+      accent: light green
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: light green
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.tabs.link
+    - toc.follow
+
+extra:
+  generator: false
+  social:
+    - icon: material/github
+      link: https://github.com/crossberry-in
+      name: crossberry-in on GitHub
+
+copyright: >
+  Copyright &copy; CrossberryWeb — Apache-2.0
+
+markdown_extensions:
+  - attr_list
+  - md_in_html
+  - def_list
+  - tables
+  - footnotes
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.mark
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - Home: index.md
+  - Guides:
+      - Terminal UX: TERMINAL-UX.md
+      - Activity Center: ACTIVITY-CENTER.md
+      - Editor (code-server): CODE-SERVER.md
+      - NX Package System: PACKAGES.md
+      - AI Agent Terminal: AI-AGENT.md
+      - Native Browser: WEB-BROWSER.md
+      - Docker: DOCKER.md
+  - Architecture & Security:
+      - Architecture: ARCHITECTURE.md
+      - Bootstrap system: BOOTSTRAP.md
+      - Security model: SECURITY.md
+      - Unix domain sockets: UNIX-SOCKETS.md
+      - Permission Center: PERMISSION-CENTER.md
+      - Rust performance core: RUST-CORE.md
+  - Extending Noxs:
+      - Noxs API (@noxs/nx-api): NX-API.md
+      - Plugin SDK: PLUGIN-SDK.md
+      - nx-installer: NX-INSTALLER.md
+  - Development:
+      - Testing & CI: TESTING.md
+      - FAQ: FAQ.md

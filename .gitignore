@@ -28,3 +28,4 @@ linux-runtime/bootstrap/**/*.sha256.staged
 # Python bytecode
 __pycache__/
 *.pyc
+site/
