@@ -689,7 +689,7 @@ env "${PKGM_ENV[@]}" NOXS_PKG_MIRROR="http://127.0.0.1:1" bash -c '. "'"$NX_LIB_
     > "$WORK/mir.out" 2>&1
 grep -q "mirror unreachable" "$WORK/mir.out" \
     && pass "mirror-down note on stderr (non-fatal accelerator)" || fail "mirror-down note"
-rc=$(NOXS_PKG_MIRROR="http://127.0.0.1:1" NOXS_PKG_REQUIRE_MIRROR=1 NX_LIB_DIR="$NX_LIB_DIR" \
+rc=$(env NOXS_PKG_MIRROR="http://127.0.0.1:1" NOXS_PKG_REQUIRE_MIRROR=1 NX_LIB_DIR="$NX_LIB_DIR" \
     bash -c '. "'"$NX_LIB_DIR"'/pkg-lib.sh"; . "'"$NX_LIB_DIR"'/pkg-ui.sh"; . "'"$NX_LIB_DIR"'/pkg-manager.sh"; pkgm_mirror_status /dev/null; exit $?' >/dev/null 2>&1; echo $?)
 [ "$rc" -eq 13 ] && pass "MIRROR_UNAVAILABLE rc 13 in require-mirror mode" || fail "MIRROR_UNAVAILABLE rc=$rc"
 # unsupported architecture -> rc 4

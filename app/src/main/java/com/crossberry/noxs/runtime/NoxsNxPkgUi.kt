@@ -198,7 +198,6 @@ ui_step() {
 # caller passes values it resolved from package metadata, never literals).
 ui_header() { # PACKAGE SOURCE VERSION ARCH
     [ "§{NOXS_PKG_JSON:-0}" = "1" ] && return 0
-    local w=44 i
     printf '%s\n' "§(ui_c green 'Noxs Package Manager')"
     printf '%s\n' "§(ui_c dim '+--------------------------------------------------+')"
     printf '  %-8s: %s\n' "Package" "§1"

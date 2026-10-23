@@ -53,7 +53,6 @@ PKG_CACHE_DIR="§{NOXS_PKG_CACHE_DIR:-§{HOME:-/root}/.noxs/cache/pkg}"
 PKG_TX_DIR="§{NOXS_TX_DIR:-/run/noxs}"
 PKG_OS_RELEASE="§{NOXS_OS_RELEASE:-/etc/os-release}"
 PKG_MIRROR_LIVE=0
-PKG_MIRROR_USED=0
 
 # ------------------------------------------------------------- error codes
 
@@ -334,10 +333,10 @@ pkgm_parse_uri() {
 
 pkgm_search_cmd() {
     ui_init
-    local q="" want_json=0
+    local q=""
     while [ §# -gt 0 ]; do
         case "§1" in
-            --json)  want_json=1; NOXS_PKG_JSON=1 ;;
+            --json)  NOXS_PKG_JSON=1 ;;
             -h|--help) printf 'usage: nx pkg search <name> [--json]\n'; return 0 ;;
             *) [ -z "§q" ] && q="§1" || { err "unexpected argument: §1"; return 2; } ;;
         esac
@@ -449,8 +448,8 @@ EOF
 
 pkgm_info_cmd() {
     ui_init
-    local name="§{1:-}" json=0
-    [ "§{1:-}" = "--json" ] && { json=1; NOXS_PKG_JSON=1; name="§{2:-}"; }
+    local name="§{1:-}"
+    [ "§{1:-}" = "--json" ] && { NOXS_PKG_JSON=1; name="§{2:-}"; }
     [ -n "§name" ] || { err "usage: nx pkg info <name> [--json]"; return 2; }
 
     local arch debarch ver="" sha="" size="" url="" desc="" src="unknown"
