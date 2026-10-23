@@ -173,6 +173,8 @@ object RootfsConfigurator {
         }
         listOf(
             "pkg-lib.sh" to NoxsNxPkgLib.PKG_LIB,
+            "pkg-ui.sh" to NoxsNxPkgUi.PKG_UI,
+            "pkg-manager.sh" to NoxsNxPkgManager.PKG_MANAGER,
             "pkg-init.sh" to NoxsNxPkgInit.PKG_INIT,
             "pkg-dev.sh" to NoxsNxPkgDev.PKG_DEV,
             "pkg-install.sh" to NoxsNxPkgInstall.PKG_INSTALL,
@@ -341,7 +343,7 @@ object RootfsConfigurator {
     //    installs the lib and rewrites the bashrc blocks in existing
     //    environments without a reinstall.
     // internal: asserted from unit tests (NoxsNxAiTest migration marker check)
-    internal val NX_PACKAGE_SYSTEM_VERSION = "12"
+    internal val NX_PACKAGE_SYSTEM_VERSION = "13"
 
     /** Guest lib files removed by a migration version — deleted on update. */
     private val RETIRED_LIB_FILES = listOf("env-lib.sh")

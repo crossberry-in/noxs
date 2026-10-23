@@ -6,6 +6,12 @@
 #   nx pkg build
 #   nx pkg release
 #   nx pkg info <name>
+#   nx pkg search <name>       Search: cache -> Noxs API -> distro -> registry
+#   nx pkg install <name>      Branded installer w/ live single-line progress
+#   nx pkg update [--full]     Refresh package indexes (apt + Noxs)
+#   nx pkg list                Installed packages (Debian + Noxs)
+#   nx pkg remove <name>       Remove a Debian or Noxs package
+#   nx pkg doctor              Health check for the package layer
 #   nx install <name>[@version]
 #   nx install -git @user/repo[@version]
 #   nx list
@@ -40,7 +46,14 @@ Package commands:
                         Create a new package project from a language template
   nx pkg build          Build the package in the current directory
   nx pkg release        Pre-flight validation before publishing a release
-  nx pkg info <name>    Show package metadata from its registry
+  nx pkg info <name>    Package details (mirror + distro + registry + installed)
+  nx pkg search <name>  Search: local cache, Noxs API, distro metadata, registry
+  nx pkg install <name> Install with the Noxs installer UI and live progress
+  nx pkg update [--full]
+                        Refresh package indexes; --full runs the upgrade
+  nx pkg list           Installed packages (Debian + Noxs)
+  nx pkg remove <name>  Remove a Debian or Noxs package
+  nx pkg doctor         Health check for the package layer
 
 Install commands:
   nx install <name>[@version]          Install an official package
@@ -88,6 +101,12 @@ usage: nx pkg init <package-name> [--node|--rust|--cpp|--python|--go]
        nx pkg build
        nx pkg release
        nx pkg info <package-name>
+       nx pkg search <name> [--json]
+       nx pkg install <name> [-y] [--json]
+       nx pkg update [--full]
+       nx pkg list
+       nx pkg remove <name> [-y]
+       nx pkg doctor
 EOF
 }
 
@@ -131,9 +150,61 @@ case "${1:-}" in
                 pkg_release_cmd "$@"
                 ;;
             info)
+                # `nx pkg info` — merged view: mirror index + distro policy
+                # + installed manifest + Noxs registry.
                 # shellcheck source=/dev/null
-                . "$NX_LIB_DIR/pkg-dev.sh"
-                pkg_registry_info_cmd "$@"
+                . "$NX_LIB_DIR/pkg-ui.sh"
+                # shellcheck source=/dev/null
+                . "$NX_LIB_DIR/pkg-manager.sh"
+                pkgm_info_cmd "$@"
+                ;;
+            search)
+                # Search priority chain: local cache -> Noxs package API ->
+                # distro official metadata -> Noxs registry. Metadata only.
+                # shellcheck source=/dev/null
+                . "$NX_LIB_DIR/pkg-ui.sh"
+                # shellcheck source=/dev/null
+                . "$NX_LIB_DIR/pkg-manager.sh"
+                pkgm_search_cmd "$@"
+                ;;
+            install)
+                # Noxs-branded installer UI with live single-line progress;
+                # Debian/Ubuntu through native apt, Noxs packages through
+                # the custom installer, mirror-first download with official
+                # fallback and sha256-keyed caching.
+                # shellcheck source=/dev/null
+                . "$NX_LIB_DIR/pkg-ui.sh"
+                # shellcheck source=/dev/null
+                . "$NX_LIB_DIR/pkg-manager.sh"
+                pkgm_install_cmd "$@"
+                ;;
+            update)
+                # shellcheck source=/dev/null
+                . "$NX_LIB_DIR/pkg-ui.sh"
+                # shellcheck source=/dev/null
+                . "$NX_LIB_DIR/pkg-manager.sh"
+                pkgm_update_cmd "$@"
+                ;;
+            list)
+                # shellcheck source=/dev/null
+                . "$NX_LIB_DIR/pkg-ui.sh"
+                # shellcheck source=/dev/null
+                . "$NX_LIB_DIR/pkg-manager.sh"
+                pkgm_list_cmd "$@"
+                ;;
+            remove)
+                # shellcheck source=/dev/null
+                . "$NX_LIB_DIR/pkg-ui.sh"
+                # shellcheck source=/dev/null
+                . "$NX_LIB_DIR/pkg-manager.sh"
+                pkgm_remove_cmd "$@"
+                ;;
+            doctor)
+                # shellcheck source=/dev/null
+                . "$NX_LIB_DIR/pkg-ui.sh"
+                # shellcheck source=/dev/null
+                . "$NX_LIB_DIR/pkg-manager.sh"
+                pkgm_doctor_cmd "$@"
                 ;;
             ""|-h|--help|help)
                 nx_pkg_usage
@@ -190,7 +261,20 @@ case "${1:-}" in
         . "$NX_LIB_DIR/pkg-lib.sh"
         # shellcheck source=/dev/null
         . "$NX_LIB_DIR/pkg-install.sh"
-        pkg_install_cmd "$@"
+        rc=0
+        pkg_install_cmd "$@" || rc=$?
+        if [ "$rc" -eq 77 ] && [ "${NOXS_INSTALL_FALLBACK:-1}" != "0" ]; then
+            # Git-registry lookup found no such package — fall through to
+            # the distro/mirror installer (nx install curl == nx pkg install
+            # curl). Disable with NOXS_INSTALL_FALLBACK=0.
+            # shellcheck source=/dev/null
+            . "$NX_LIB_DIR/pkg-ui.sh"
+            # shellcheck source=/dev/null
+            . "$NX_LIB_DIR/pkg-manager.sh"
+            pkgm_install_cmd "$@"
+        else
+            [ "$rc" -ne 0 ] && exit "$rc"
+        fi
         ;;
     list)
         shift                       # drop "list"

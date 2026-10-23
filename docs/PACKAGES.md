@@ -172,3 +172,43 @@ Each carries the full release automation (`.github/workflows/pkg.yml`,
 `registry.json`, `VERSION`) generated from the canonical Noxs templates, so
 `nx install tree` resolves, verifies and installs straight from that
 repository's releases. See `nx-pkg/README.md`.
+
+## Distro packages — `nx pkg` (Debian / Ubuntu)
+
+`nx pkg` is the distro-aware front end on top of the Git package system:
+
+```bash
+nx pkg search <name> [--json]   # cache -> Noxs API -> distro metadata -> registry
+nx pkg info <name> [--json]     # merged view of every source + installed state
+nx pkg install <name> [-y]      # Noxs installer UI with live single-line progress
+nx pkg update [--full]          # refresh indexes; --full runs the upgrade
+nx pkg list                     # installed Debian + Noxs packages
+nx pkg remove <name> [-y]       # remove via apt or the Noxs manifest
+nx pkg doctor                   # health check for the whole package layer
+```
+
+On Debian and Ubuntu guests dependency resolution, download and actual
+installation stay inside the **native apt engine**: `apt-get --print-uris`
+supplies the file list, sizes and SHA-256 hashes straight from the signed
+repository metadata; every downloaded `.deb` is re-verified against that
+hash before `apt-get install` runs. Nothing is ever installed unauthenticated
+and the Debian package database is never replaced. `nx install <name>`
+delegates to the same flow when the name is not a Git-registry package
+(disable with `NOXS_INSTALL_FALLBACK=0`).
+
+Install progress renders ONE terminal line —
+`Downloading curl_…arm64.deb  67%  4.8/7.2 MB  2.1 MB/s  ETA 2s` —
+computed from real bytes and elapsed time (unknown sizes show bytes and
+speed, never an invented percentage); non-interactive terminals and CI get
+a plain multi-line transcript, `--json` keeps stdout machine-readable, and
+diagnostics go to stderr. Stable error codes: `PACKAGE_NOT_FOUND`,
+`UNSUPPORTED_ARCHITECTURE`, `NETWORK_ERROR`, `DOWNLOAD_FAILED`,
+`CHECKSUM_MISMATCH`, `SIGNATURE_VERIFICATION_FAILED`,
+`DEPENDENCY_RESOLUTION_FAILED`, `INSUFFICIENT_DISK_SPACE`,
+`INSTALL_PERMISSION_DENIED`, `PACKAGE_MANAGER_BUSY`, `MIRROR_UNAVAILABLE`.
+
+Downloads prefer the [Noxs mirror](MIRROR.md) (sha256-keyed cache in
+`~/.noxs/cache/pkg`, cache hits reported), fall back to the official
+repository URL automatically, and never bypass signature verification.
+Concurrent package operations are locked out via the single-flight
+transaction flag (`PACKAGE_MANAGER_BUSY`).

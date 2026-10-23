@@ -35,6 +35,8 @@ for name, content, mirror in extract_nx.nx_shell_scripts(root):
               'VPN_LIB': 'noxs-pkg/vpn-lib.sh',
               'PLUG_LIB': 'noxs-pkg/plug-lib.sh',
               'CERT_FIX_LIB': 'noxs-pkg/cert-fix.sh',
+              'PKG_UI': 'noxs-pkg/pkg-ui.sh',
+              'PKG_MANAGER': 'noxs-pkg/pkg-manager.sh',
               'AI_LIB': 'noxs-pkg/ai-lib.sh',
               'WELCOME_SH': 'launcher/noxs-welcome'}[name]
     target = dest / module
@@ -428,6 +430,287 @@ if [ ! -d "$TMP/nxroot/ai" ]; then fail "ai python runtime extracted"; else
         pass "no provider keys embedded"
     fi
 fi
+
+# ---- pkg-ui: single-line progress primitives --------------------------------
+echo "=== pkg-ui: progress primitives ==="
+. "$NX_LIB_DIR/pkg-ui.sh"
+ui_init
+[ "$PKG_UI_TTY" = "0" ] && pass "non-tty detected (live renderer disabled)" || fail "non-tty detected"
+out=$(progress_render "Downloading x" 100 200 5); [ -z "$out" ] \
+    && pass "progress_render silent when UI disabled" || fail "progress_render silent when UI disabled"
+calc=$(progress_calc 3600 7200 3)
+[ "$calc" = "50 1200 3" ] && pass "percentage/speed/ETA math ($calc)" || fail "progress_calc math: $calc"
+calc=$(progress_calc 100 - 5)
+[ "${calc%% *}" = "-" ] && pass "unknown total -> no invented percentage" || fail "unknown total pct: $calc"
+calc=$(progress_calc 3600 7200 1)
+[ "${calc##* }" = "-" ] && pass "ETA withheld before 2s of samples" || fail "ETA gating: $calc"
+calc=$(progress_calc 7200 7200 10)
+[ "${calc%% *}" = "100" ] && pass "completion reaches 100%" || fail "100%: $calc"
+[ "$(humanize_bytes 5033164)" = "4.8 MB" ] && pass "humanize_bytes" || fail "humanize_bytes"
+[ "$(progress_fmt_speed 2202009)" = "2.1 MB/s" ] && pass "progress_fmt_speed" || fail "progress_fmt_speed"
+[ "$(progress_fmt_eta 185)" = "ETA 3m05s" ] && pass "progress_fmt_eta minutes" || fail "progress_fmt_eta m"
+[ "$(progress_fmt_eta 2)" = "ETA 2s" ] && pass "progress_fmt_eta seconds" || fail "progress_fmt_eta s"
+# forced-tty rendering: single line, \r refresh, stale-character clearing
+PKG_UI_TTY=1; PKG_UI_COLS=80; PKG_UI_LASTLEN=0
+progress_render "Downloading demo_1.2.3_amd64.deb" 1024 4096 1 > "$WORK/render1"
+[ "$(wc -l < "$WORK/render1")" -eq 0 ] && pass "no newline in live progress line" || fail "live line emitted newline"
+grep -q $'\r' "$WORK/render1" && pass "\\r carriage-return refresh present" || fail "\\r missing"
+progress_render "OK" 4096 4096 4 >> "$WORK/render1"
+[ "$PKG_UI_LASTLEN" -lt 60 ] && pass "progress line length tracked" || fail "LASTLEN not tracked"
+progress_clear
+[ "$PKG_UI_LASTLEN" -eq 0 ] && pass "progress_clear resets state" || fail "progress_clear"
+PKG_UI_TTY=0
+
+# ---- pkg-manager: OS detection + error codes --------------------------------
+echo "=== pkg-manager: OS detection + error codes ==="
+. "$NX_LIB_DIR/pkg-manager.sh"
+printf 'ID=debian\nVERSION_ID="12"\n' > "$WORK/os.debian"
+printf 'ID=ubuntu\nID_LIKE=debian\n' > "$WORK/os.ubuntu"
+printf 'ID=fedora\n' > "$WORK/os.fedora"
+PKG_OS_RELEASE="$WORK/os.debian" pkgm_detect_os
+[ "$PKG_OS" = "debian" ] && pass "Debian detected" || fail "debian detect: $PKG_OS"
+PKG_OS_RELEASE="$WORK/os.ubuntu" pkgm_detect_os
+[ "$PKG_OS" = "ubuntu" ] && pass "Ubuntu detected (ID)" || fail "ubuntu detect: $PKG_OS"
+PKG_OS_RELEASE="$WORK/os.fedora" pkgm_detect_os
+[ "$PKG_OS" = "unknown" ] && pass "non-Debian OS -> unknown (Noxs packages only)" || fail "fedora detect"
+for code in PACKAGE_NOT_FOUND UNSUPPORTED_ARCHITECTURE NETWORK_ERROR DOWNLOAD_FAILED \
+            CHECKSUM_MISMATCH SIGNATURE_VERIFICATION_FAILED DEPENDENCY_RESOLUTION_FAILED \
+            INSUFFICIENT_DISK_SPACE INSTALL_PERMISSION_DENIED PACKAGE_MANAGER_BUSY MIRROR_UNAVAILABLE; do
+    rc=$(pkgm_rc "$code")
+    case "$rc" in ''|*[!0-9]*|0) fail "exit code for $code ($rc)" ;; *) pass "$code -> rc $rc" ;; esac
+done
+grep -q 'eval "set --' "$NX_LIB_DIR/pkg-manager.sh" \
+    && fail "apt print-uris parsed without eval (injection-safe)" || \
+    pass "apt print-uris parsed without eval (injection-safe)"
+line="'http://deb.debian.org/debian/pool/main/d/demo/demo_1.2.3_amd64.deb' demo_1.2.3_amd64.deb 262144 SHA256:abcdef1234567890 demo"
+pkgm_parse_uri "$line"
+[ "$PU_URL" = "http://deb.debian.org/debian/pool/main/d/demo/demo_1.2.3_amd64.deb" ] \
+    && [ "$PU_FILE" = "demo_1.2.3_amd64.deb" ] && [ "$PU_SIZE" = "262144" ] \
+    && [ "$PU_SHA" = "abcdef1234567890" ] && [ "$PU_NAME" = "demo" ] \
+    && pass "print-uris line parsed as data" || fail "pkgm_parse_uri: $PU_URL|$PU_FILE|$PU_SIZE|$PU_SHA|$PU_NAME"
+
+# ---- pkg-manager: end-to-end against a local mirror + stub apt --------------
+echo "=== pkg-manager: local mirror + stub apt end-to-end ==="
+SRV="$WORK/srv"; mkdir -p "$SRV/api/mirror" "$SRV/api/packages" \
+    "$SRV/debian/pool/main/d/demo" "$SRV/debian/pool/main/d/bad"
+printf 'demo-payload-for-noxs-tests' > "$SRV/debian/pool/main/d/demo/demo_1.2.3_amd64.deb"
+cp "$SRV/debian/pool/main/d/demo/demo_1.2.3_amd64.deb" "$SRV/debian/pool/main/d/demo/demo_1.2.3_arm64.deb"
+printf 'tampered-payload' > "$SRV/debian/pool/main/d/bad/bad_0.9.9_amd64.deb"
+DEMO_SHA=$(sha256sum "$SRV/debian/pool/main/d/demo/demo_1.2.3_amd64.deb" | awk '{print $1}')
+DEMO_SIZE=$(wc -c < "$SRV/debian/pool/main/d/demo/demo_1.2.3_amd64.deb" | tr -d ' ')
+DEMO_SHA_ARM=$(sha256sum "$SRV/debian/pool/main/d/demo/demo_1.2.3_arm64.deb" | awk '{print $1}')
+cat > "$SRV/api/mirror/status.json" <<EOF
+{"status":"ok","service":"noxs-pkg-mirror","partial":false,"upstream":"local","suite":"bookworm","component":"main","arches":["arm64","amd64"],"packages":1,"approx_bytes":56,"skipped":[],"download_failures":[],"packages_noxs":0,"mirror_base":"local","synced_at":"2026-01-01T00:00:00Z"}
+EOF
+cat > "$SRV/api/packages/index.json" <<EOF
+{
+  "generated_at": "2026-01-01T00:00:00Z",
+  "mirror_base": "local",
+  "count": 2,
+  "packages": [
+    {
+      "name": "demo",
+      "source": "debian",
+      "distro": "debian",
+      "suite": "bookworm",
+      "component": "main",
+      "seed": true,
+      "arches": {
+        "amd64": {
+          "version": "1.2.3",
+          "sha256": "$DEMO_SHA",
+          "size": $DEMO_SIZE,
+          "path": "debian/pool/main/d/demo/demo_1.2.3_amd64.deb",
+          "download_url": "local/debian/pool/main/d/demo/demo_1.2.3_amd64.deb"
+        },
+        "arm64": {
+          "version": "1.2.3",
+          "sha256": "$DEMO_SHA_ARM",
+          "size": $DEMO_SIZE,
+          "path": "debian/pool/main/d/demo/demo_1.2.3_arm64.deb",
+          "download_url": "local/debian/pool/main/d/demo/demo_1.2.3_arm64.deb"
+        }
+      },
+      "description": "demo package for tests"
+    },
+    {
+      "name": "bad",
+      "source": "debian",
+      "distro": "debian",
+      "suite": "bookworm",
+      "component": "main",
+      "seed": false,
+      "arches": {
+        "amd64": {
+          "version": "0.9.9",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "size": 16,
+          "path": "debian/pool/main/d/bad/bad_0.9.9_amd64.deb",
+          "download_url": "local/debian/pool/main/d/bad/bad_0.9.9_amd64.deb"
+        }
+      },
+      "description": "tampered package fixture"
+    }
+  ]
+}
+EOF
+python3 - "$SRV" <<'PY' &
+import http.server, sys, functools
+handler = functools.partial(http.server.SimpleHTTPRequestHandler,
+                            directory=sys.argv[1])
+http.server.HTTPServer(("127.0.0.1", 18099), handler).serve_forever()
+PY
+SRV_PID=$!
+trap 'kill "$SRV_PID" 2>/dev/null; rm -rf "$TMP"' EXIT
+for i in 1 2 3 4 5 6 7 8 9 10; do
+    (exec 3<>/dev/tcp/127.0.0.1/18099) 2>/dev/null && { exec 3>&- 3<&-; break; } || sleep 0.5
+done
+
+FAKEBIN="$WORK/fakebin"; mkdir -p "$FAKEBIN"
+printf '#!/bin/bash\nexec "$@"\n' > "$FAKEBIN/sudo"; chmod +x "$FAKEBIN/sudo"
+printf '#!/bin/bash\nexit 1\n' > "$FAKEBIN/pgrep"; chmod +x "$FAKEBIN/pgrep"
+mkdir -p "$WORK/lists"; printf 'Package: demo\n' > "$WORK/lists/Packages"
+apt_ok_stub() {
+cat > "$FAKEBIN/apt-get" <<EOF
+#!/bin/bash
+echo "apt-get \$*" >> "$WORK/apt-calls.log"
+case " \$*" in
+  *" --print-uris"*)
+    if printf '%s\n' "\$*" | grep -q ' bad'; then
+      echo "'http://deb.debian.org/debian/pool/main/d/bad/bad_0.9.9_amd64.deb' bad_0.9.9_amd64.deb 9 SHA256:0000000000000000000000000000000000000000000000000000000000000000 bad"
+    else
+      echo "'http://deb.debian.org/debian/pool/main/d/demo/demo_1.2.3_amd64.deb' demo_1.2.3_amd64.deb $DEMO_SIZE SHA256:$DEMO_SHA demo"
+      echo "'http://deb.debian.org/debian/pool/main/d/demo/demo_1.2.3_arm64.deb' demo_1.2.3_arm64.deb $DEMO_SIZE SHA256:$DEMO_SHA_ARM demo"
+    fi
+    exit 0 ;;
+  *" update"*) exit 0 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$FAKEBIN/apt-get"
+}
+apt_ok_stub
+cat > "$FAKEBIN/apt-cache" <<'EOF'
+#!/bin/bash
+case "$*" in
+  *"show demo"*) exit 0 ;;
+  *"show"*)      exit 100 ;;
+  *"policy demo"*) printf 'demo:\n  Installed: (none)\n  Candidate: 9.9.9-official\n' ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$FAKEBIN/apt-cache"
+
+PKGM_ENV=(NOXS_PKG_MIRROR="http://127.0.0.1:18099"
+          NOXS_PKG_CACHE_DIR="$WORK/cache" NOXS_TX_DIR="$WORK/run"
+          NOXS_OS_RELEASE="$WORK/os.debian" NOXS_APT_LISTS_DIR="$WORK/lists"
+          NX_LIB_DIR="$NX_LIB_DIR")
+
+env "${PKGM_ENV[@]}" bash -c '. "'"$NX_LIB_DIR"'/pkg-lib.sh"; . "'"$NX_LIB_DIR"'/pkg-ui.sh"; . "'"$NX_LIB_DIR"'/pkg-manager.sh"; pkgm_search_cmd demo --json' \
+    > "$WORK/search.json" 2>"$WORK/search.err"
+python3 -c "import json,sys; d=json.load(open('$WORK/search.json')); assert d[0]['name']=='demo' and d[0]['source']=='noxs-mirror', d" \
+    && pass "search finds mirror package, valid --json" || fail "search --json"
+env "${PKGM_ENV[@]}" bash -c '. "'"$NX_LIB_DIR"'/pkg-lib.sh"; . "'"$NX_LIB_DIR"'/pkg-ui.sh"; . "'"$NX_LIB_DIR"'/pkg-manager.sh"; pkgm_search_cmd demo' \
+    > "$WORK/search.txt" 2>/dev/null
+grep -q "noxs-mirror" "$WORK/search.txt" && pass "search tags the source" || fail "search source tag"
+env "${PKGM_ENV[@]}" bash -c '. "'"$NX_LIB_DIR"'/pkg-lib.sh"; . "'"$NX_LIB_DIR"'/pkg-ui.sh"; . "'"$NX_LIB_DIR"'/pkg-manager.sh"; pkgm_search_cmd definitely-not-a-package-xyz' \
+    > "$WORK/none.out" 2>&1
+rc=$?
+[ "$rc" -eq 3 ] && grep -q "PACKAGE_NOT_FOUND" "$WORK/none.out" \
+    && pass "PACKAGE_NOT_FOUND after the full chain" || fail "PACKAGE_NOT_FOUND chain (rc=$rc)"
+
+# install: mirror-sourced, stubbed apt, real download + sha256 verify
+rm -rf "$WORK/cache" "$WORK/apt-calls.log"
+env "${PKGM_ENV[@]}" bash -c '. "'"$NX_LIB_DIR"'/pkg-lib.sh"; . "'"$NX_LIB_DIR"'/pkg-ui.sh"; . "'"$NX_LIB_DIR"'/pkg-manager.sh"; PATH="'$FAKEBIN':$PATH" pkgm_install_cmd demo' \
+    > "$WORK/install.out" 2>"$WORK/install.err"
+rc=$?
+[ "$rc" -eq 0 ] && pass "pkgm_install_cmd demo succeeded" || { fail "install rc=$rc"; cat "$WORK/install.err" >&2; }
+grep -q "Noxs Package Manager" "$WORK/install.out" && pass "branded header panel" || fail "header panel"
+grep -q "noxs-mirror" "$WORK/install.out" && pass "Source line shows mirror" || fail "source line"
+for s in "\[1/5\] Resolving dependencies" "\[2/5\] Fetching package metadata" \
+         "\[3/5\] Downloading packages" "\[4/5\] Verifying package integrity" \
+         "\[5/5\] Installing packages"; do
+    grep -q "$s" "$WORK/install.out" && pass "stage $s" || fail "stage $s"
+done
+grep -qE "Verifying SHA256  demo_1\.2\.3_[a-z0-9]+\.deb  \[OK\]" "$WORK/install.out" \
+    && pass "per-file SHA256 verification line" || fail "verify line"
+grep -q "Result: OK" "$WORK/install.out" && pass "Result: OK only after real confirmation" || fail "Result OK"
+grep -q "demo_1.2.3" "$WORK/apt-calls.log" \
+    && pass "apt-get install received the downloaded .deb paths" || fail "apt call log"
+if grep -q $'\r' "$WORK/install.out"; then
+    fail "non-interactive fallback: no \\r churn in CI output"
+else
+    pass "non-interactive fallback: no \\r churn in CI output"
+fi
+# second install -> real cache hit
+env "${PKGM_ENV[@]}" bash -c '. "'"$NX_LIB_DIR"'/pkg-lib.sh"; . "'"$NX_LIB_DIR"'/pkg-ui.sh"; . "'"$NX_LIB_DIR"'/pkg-manager.sh"; PATH="'$FAKEBIN':$PATH" pkgm_install_cmd demo' \
+    > "$WORK/install2.out" 2>&1
+grep -q "cache hit" "$WORK/install2.out" \
+    && pass "sha256-keyed cache hit on reinstall" || fail "cache hit"
+# checksum mismatch -> rc 7 (HTTP 200 alone is never trust)
+env "${PKGM_ENV[@]}" NOXS_PKG_CACHE_DIR="$WORK/cache2" bash -c '. "'"$NX_LIB_DIR"'/pkg-lib.sh"; . "'"$NX_LIB_DIR"'/pkg-ui.sh"; . "'"$NX_LIB_DIR"'/pkg-manager.sh"; PATH="'$FAKEBIN':$PATH" pkgm_install_cmd bad' \
+    > "$WORK/bad.out" 2>&1
+rc=$?
+[ "$rc" -eq 7 ] && grep -q "CHECKSUM_MISMATCH" "$WORK/bad.out" \
+    && pass "CHECKSUM_MISMATCH -> rc 7" || fail "checksum mismatch rc=$rc"
+# busy lock
+mkdir -p "$WORK/run"; echo other > "$WORK/run/pkg-tx"
+env "${PKGM_ENV[@]}" bash -c '. "'"$NX_LIB_DIR"'/pkg-lib.sh"; . "'"$NX_LIB_DIR"'/pkg-ui.sh"; . "'"$NX_LIB_DIR"'/pkg-manager.sh"; PATH="'$FAKEBIN':$PATH" pkgm_install_cmd demo' \
+    > "$WORK/busy.out" 2>&1
+rc=$?
+[ "$rc" -eq 12 ] && grep -q "PACKAGE_MANAGER_BUSY" "$WORK/busy.out" \
+    && pass "concurrent install protection (PACKAGE_MANAGER_BUSY rc 12)" || fail "busy rc=$rc"
+rm -f "$WORK/run/pkg-tx"
+# dependency resolution failure -> rc 9
+printf '#!/bin/bash\nexit 100\n' > "$FAKEBIN/apt-get"; chmod +x "$FAKEBIN/apt-get"
+env "${PKGM_ENV[@]}" NOXS_PKG_MIRROR=off bash -c '. "'"$NX_LIB_DIR"'/pkg-lib.sh"; . "'"$NX_LIB_DIR"'/pkg-ui.sh"; . "'"$NX_LIB_DIR"'/pkg-manager.sh"; PATH="'$FAKEBIN':$PATH" pkgm_install_cmd demo' \
+    > "$WORK/dep.out" 2>&1
+rc=$?
+[ "$rc" -eq 9 ] && grep -q "DEPENDENCY_RESOLUTION_FAILED" "$WORK/dep.out" \
+    && pass "DEPENDENCY_RESOLUTION_FAILED -> rc 9" || fail "dep resolution rc=$rc"
+# signature verification failure -> rc 8 (apt log carries UNAUTHENTICATED)
+cat > "$FAKEBIN/apt-get" <<EOF
+#!/bin/bash
+case " \$*" in
+  *" --print-uris"*)
+    echo "'http://deb.debian.org/debian/pool/main/d/demo/demo_1.2.3_amd64.deb' demo_1.2.3_amd64.deb $DEMO_SIZE SHA256:$DEMO_SHA demo"
+    exit 0 ;;
+  *) echo "E: UNAUTHENTICATED package rejected" ; exit 100 ;;
+esac
+EOF
+chmod +x "$FAKEBIN/apt-get"
+env "${PKGM_ENV[@]}" NOXS_PKG_MIRROR=off bash -c '. "'"$NX_LIB_DIR"'/pkg-lib.sh"; . "'"$NX_LIB_DIR"'/pkg-ui.sh"; . "'"$NX_LIB_DIR"'/pkg-manager.sh"; PATH="'$FAKEBIN':$PATH" pkgm_install_cmd demo' \
+    > "$WORK/sig.out" 2>&1
+rc=$?
+[ "$rc" -eq 8 ] && grep -q "SIGNATURE_VERIFICATION_FAILED" "$WORK/sig.out" \
+    && pass "SIGNATURE_VERIFICATION_FAILED -> rc 8 (never bypassed)" || fail "signature rc=$rc"
+# mirror down: accelerator falls back, require-mode raises MIRROR_UNAVAILABLE
+env "${PKGM_ENV[@]}" NOXS_PKG_MIRROR="http://127.0.0.1:1" bash -c '. "'"$NX_LIB_DIR"'/pkg-lib.sh"; . "'"$NX_LIB_DIR"'/pkg-ui.sh"; . "'"$NX_LIB_DIR"'/pkg-manager.sh"; pkgm_mirror_status /dev/null' \
+    > "$WORK/mir.out" 2>&1
+grep -q "mirror unreachable" "$WORK/mir.out" \
+    && pass "mirror-down note on stderr (non-fatal accelerator)" || fail "mirror-down note"
+rc=$(NOXS_PKG_MIRROR="http://127.0.0.1:1" NOXS_PKG_REQUIRE_MIRROR=1 NX_LIB_DIR="$NX_LIB_DIR" \
+    bash -c '. "'"$NX_LIB_DIR"'/pkg-lib.sh"; . "'"$NX_LIB_DIR"'/pkg-ui.sh"; . "'"$NX_LIB_DIR"'/pkg-manager.sh"; pkgm_mirror_status /dev/null; exit $?' >/dev/null 2>&1; echo $?)
+[ "$rc" -eq 13 ] && pass "MIRROR_UNAVAILABLE rc 13 in require-mirror mode" || fail "MIRROR_UNAVAILABLE rc=$rc"
+# unsupported architecture -> rc 4
+printf '#!/bin/bash\necho mips\n' > "$FAKEBIN/uname"; chmod +x "$FAKEBIN/uname"
+env "${PKGM_ENV[@]}" NOXS_PKG_MIRROR=off bash -c '. "'"$NX_LIB_DIR"'/pkg-lib.sh"; . "'"$NX_LIB_DIR"'/pkg-ui.sh"; . "'"$NX_LIB_DIR"'/pkg-manager.sh"; PATH="'$FAKEBIN':$PATH" pkgm_install_cmd demo' \
+    > "$WORK/arch.out" 2>&1
+rc=$?
+[ "$rc" -eq 4 ] && grep -q "UNSUPPORTED_ARCHITECTURE" "$WORK/arch.out" \
+    && pass "UNSUPPORTED_ARCHITECTURE -> rc 4" || fail "arch rc=$rc"
+rm -f "$FAKEBIN/uname"
+# doctor produces a structured report against the live local mirror
+env "${PKGM_ENV[@]}" NOXS_PKG_MIRROR="http://127.0.0.1:18099" bash -c '. "'"$NX_LIB_DIR"'/pkg-lib.sh"; . "'"$NX_LIB_DIR"'/pkg-ui.sh"; . "'"$NX_LIB_DIR"'/pkg-manager.sh"; PATH="'$FAKEBIN':$PATH" pkgm_doctor_cmd' \
+    > "$WORK/doctor.out" 2>&1
+grep -q "PASS" "$WORK/doctor.out" && pass "doctor produces PASS/FAIL/WARN report" || fail "doctor output"
+# dispatcher wiring: help-safe subcommands only (update/remove would touch apt)
+for sub in search install list doctor; do
+    "$NXBIN" pkg "$sub" --help >/dev/null 2>&1
+    [ $? -le 2 ] && pass "nx pkg $sub wired" || fail "nx pkg $sub wired"
+done
+"$NXBIN" pkg 2>/dev/null | grep -q "nx pkg search" \
+    && pass "nx pkg usage lists the new commands" || fail "usage lists new commands"
 
 echo
 if [ "$RC" -eq 0 ]; then

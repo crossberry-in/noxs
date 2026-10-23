@@ -19,6 +19,8 @@ RUNTIME_DIR = "app/src/main/java/com/crossberry/noxs/runtime"
 SHELL_CONSTANTS = {
     "NX_CLI": ("NoxsNxTemplate.kt", "linux-runtime/launcher/nx"),
     "PKG_LIB": ("NoxsNxPkgLib.kt", "linux-runtime/nx/pkg-lib.sh"),
+    "PKG_UI": ("NoxsNxPkgUi.kt", "linux-runtime/nx/pkg-ui.sh"),
+    "PKG_MANAGER": ("NoxsNxPkgManager.kt", "linux-runtime/nx/pkg-manager.sh"),
     "PKG_INIT": ("NoxsNxPkgInit.kt", "linux-runtime/nx/pkg-init.sh"),
     "PKG_DEV": ("NoxsNxPkgDev.kt", "linux-runtime/nx/pkg-dev.sh"),
     "PKG_INSTALL": ("NoxsNxPkgInstall.kt", "linux-runtime/nx/pkg-install.sh"),

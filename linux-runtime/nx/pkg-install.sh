@@ -19,9 +19,14 @@ install_one() {
     stage "Resolving package..."
     if ! registry_fetch "$owner" "$repo" "$NX_WORK/registry.json"; then
         if [ "${RF_CODE:-}" = "404" ]; then
-            die "Package not found: $display"
+            # 77 = the package does not exist in the Git registry — the nx
+            # dispatcher uses this to fall back to the distro/mirror
+            # installer (nx install curl -> nx pkg install curl).
+            err "Package not found in the Noxs registry: $display"
+            return 77
         fi
-        die "Could not reach the package registry. Check your connection and try again."
+        err "Could not reach the package registry. Check your connection and try again."
+        return 78
     fi
     registry_parse "$NX_WORK/registry.json"
     [ "$RG_NAME" = "$repo" ] || die "Invalid registry.json: package name does not match the repository."
