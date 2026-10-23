@@ -2,6 +2,9 @@
 
 **A Debian-optimized Linux environment for Android — a small Linux computer in your pocket.**
 
+**Documentation: [crossberry-in.github.io/noxs](https://crossberry-in.github.io/noxs/)**
+— built with Material for MkDocs, deployed on every change to `main`.
+
 Noxs runs a real **Debian 12 (Bookworm)** userspace — bash, APT, sudo, Unix
 domain sockets under `/run` and `/var/run`, user accounts, services and the
 full Linux filesystem hierarchy — inside the Android application sandbox,
@@ -62,7 +65,7 @@ noxs/
 ├── app/                    Android application (UI, runtime, native PTY)
 │   └── src/main/cpp/       noxs-pty.c — forkpty/execve JNI bridge
 ├── terminal-emulator/      Clean-room VT/xterm engine (pure Kotlin, tested)
-├── terminal-view/          Android terminal View + renderer + extra keys
+├── terminal-view/          Android terminal View + renderer + shortcut-key row
 ├── noxs-shared/            Security core (checksums, TarGuard, users, quotas)
 ├── rust/                   noxs-core — Rust performance core (checksum, archive,
 │                           tasks, security; stable FFI)

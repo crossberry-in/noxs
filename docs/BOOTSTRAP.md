@@ -1,11 +1,13 @@
 # Noxs bootstrap system
 
+![First-launch bootstrap flow](assets/images/bootstrap-flow.svg)
+
 ## What gets installed
 
 | Artifact        | Source (default)                                             | Size     |
 |-----------------|--------------------------------------------------------------|----------|
 | Debian 12 rootfs| `debuerreotype/docker-debian-artifacts` (official Debian CI), pinned to an immutable commit SHA under `<suite>/oci/blobs/rootfs.tar.gz` | ~44–49 MB compressed |
-| proot + deps    | **Bundled in the APK** as `jniLibs/<abi>/{libproot,libtalloc,libandroid-shmem}.so` (Termux proot 5.1.107.96 build, bionic-linked) | ~300 KB |
+| proot + deps    | **Bundled in the APK** as `jniLibs/<abi>/{libproot,libtalloc,libandroid-shmem}.so` (bionic-linked proot 5.1.107.96 build) | ~300 KB |
 
 The rootfs is verified with SHA-256 before use. Release builds **pin** digests
 via `scripts/build-rootfs.sh`; development builds may run unpinned (the

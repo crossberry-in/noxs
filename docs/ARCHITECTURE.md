@@ -1,5 +1,9 @@
 # Noxs — Architecture
 
+![Noxs architecture diagram](assets/images/architecture.svg)
+
+The same layout in text form:
+
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │ Android host (Linux kernel, SELinux enforcing)                   │
@@ -15,7 +19,7 @@
 │  │   │                  NoxsSocketServer · NoxsResources      │  │
 │  │   └── cpp/noxs-pty.c forkpty/execve bridge (JNI)           │  │
 │  │                                                            │  │
-│  │  terminal-view    TerminalView · renderer · extra keys     │  │
+│  │  terminal-view    TerminalView · renderer · shortcut keys  │  │
 │  │  terminal-emulator clean-room VT/xterm engine (pure Kotlin)│  │
 │  │  noxs-shared      security core: TarGuard, Checksum,       │  │
 │  │                   PasswdDb, SocketPathValidator, quotas    │  │
@@ -42,7 +46,7 @@
 |---------------------|-----------------------------------------------------------------------|
 | `:app`              | Android app: UI, installer, proot launcher, services, native PTY      |
 | `:terminal-emulator`| VT100/VT220/xterm-subset parser + buffer + session (pure JVM, tested) |
-| `:terminal-view`    | Android rendering/input View, extra-keys bar                          |
+| `:terminal-view`    | Android rendering/input View, shortcut-key row                        |
 | `:noxs-shared`      | Security core used by both sides (extraction, checksums, users, quota)|
 
 ## Key flows

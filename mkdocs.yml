@@ -89,6 +89,7 @@ nav:
       - Activity Center: ACTIVITY-CENTER.md
       - Editor (code-server): CODE-SERVER.md
       - NX Package System: PACKAGES.md
+      - Certificates & APT repair: CERT-FIX.md
       - AI Agent Terminal: AI-AGENT.md
       - Native Browser: WEB-BROWSER.md
       - Docker: DOCKER.md

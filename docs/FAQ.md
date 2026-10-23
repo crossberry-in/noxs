@@ -1,9 +1,9 @@
 # FAQ
 
-**Is Noxs Termux?**
-No. Noxs is an original project (Apache-2.0) inspired by the well-known
-"terminal emulator + Linux userspace on Android" architecture. No Termux code,
-branding, or assets are used. The engine also differs: Noxs runs an official
+**Is Noxs based on another terminal app?**
+No. Noxs is an original project (Apache-2.0) — clean-room architecture,
+code, branding and assets. No third-party terminal code, branding, or
+assets are used, and the engine differs too: Noxs runs an official
 Debian 12 rootfs via proot instead of bionic-compiled packages in $PREFIX.
 
 **Does Noxs root my phone?**

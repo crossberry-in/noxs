@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="1010" viewBox="0 0 780 1010" font-family="Roboto, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#4ade80"/>
+    </marker>
+  </defs>
+  <rect x="20" y="20" width="740" height="970" rx="14" fill="#10161d" stroke="#263241"/>
+  <text x="40" y="54" font-size="20" font-weight="700" fill="#e8f5ee">nx cert-fix — repair flow</text>
+  <text x="40" y="76" font-size="12" fill="#8aa39b">Every network step is bounded (2 attempts, 3 s backoff) and verified beyond the exit code</text>
+
+  <g font-size="11">
+    <rect x="180" y="96" width="420" height="66" rx="10" fill="#18242f" stroke="#33465a"/>
+    <text x="196" y="118" font-size="13" font-weight="700" fill="#4ade80">01 · Preflight</text>
+    <text x="196" y="136" fill="#c7d6cf">package-manager busy check · single-flight flag /run/noxs/pkg-tx</text>
+    <text x="196" y="152" fill="#c7d6cf">TXT log opened · missing noxs.sources self-healed (HTTPS, GPG)</text>
+
+    <rect x="180" y="182" width="420" height="50" rx="10" fill="#18242f" stroke="#33465a"/>
+    <text x="196" y="204" font-size="13" font-weight="700" fill="#4ade80">02 · Refresh existing CA bundle</text>
+    <text x="196" y="220" fill="#c7d6cf">update-ca-certificates (best effort)</text>
+
+    <rect x="180" y="252" width="420" height="66" rx="10" fill="#18242f" stroke="#33465a"/>
+    <text x="196" y="274" font-size="13" font-weight="700" fill="#4ade80">03 · apt-get update — proof required</text>
+    <text x="196" y="292" fill="#c7d6cf">exit 0 alone is not success: strict error mode, output signature</text>
+    <text x="196" y="308" fill="#c7d6cf">scan (TLS / Err: / failed-to-fetch), populated-lists check</text>
+
+    <!-- decision -->
+    <polygon points="390,338 560,388 390,438 220,388" fill="#1c2a20" stroke="#4ade80"/>
+    <text x="330" y="382" font-size="13" font-weight="700" fill="#4ade80">update verified?</text>
+    <text x="330" y="400" font-size="11" fill="#d7e8de">lists populated?</text>
+    <text x="566" y="380" font-size="11" fill="#8aa39b">no (HTTPS failed)</text>
+
+    <rect x="560" y="352" width="180" height="72" rx="10" fill="#1c2a20" stroke="#4ade80" stroke-dasharray="5 4"/>
+    <text x="574" y="374" font-size="12" font-weight="700" fill="#4ade80">Signed-HTTP fallback</text>
+    <text x="574" y="390" fill="#c7d6cf">Debian metadata stays</text>
+    <text x="574" y="404" fill="#c7d6cf">GPG-authenticated over</text>
+    <text x="574" y="418" fill="#c7d6cf">HTTP — safe, then retry</text>
+
+    <rect x="180" y="478" width="420" height="50" rx="10" fill="#18242f" stroke="#33465a"/>
+    <text x="196" y="500" font-size="13" font-weight="700" fill="#4ade80">04 · dpkg recovery</text>
+    <text x="196" y="516" fill="#c7d6cf">dpkg --configure -a — interrupted configuration repaired</text>
+
+    <rect x="180" y="548" width="420" height="66" rx="10" fill="#18242f" stroke="#33465a"/>
+    <text x="196" y="570" font-size="13" font-weight="700" fill="#4ade80">05 · Install the certificate stack + fetch tools</text>
+    <text x="196" y="588" fill="#c7d6cf">ca-certificates · debian-archive-keyring · curl · wget</text>
+    <text x="196" y="604" fill="#c7d6cf">on failure: disk-space + dpkg --audit diagnostics in the TXT log</text>
+
+    <rect x="180" y="634" width="420" height="50" rx="10" fill="#18242f" stroke="#33465a"/>
+    <text x="196" y="656" font-size="13" font-weight="700" fill="#4ade80">06 · Regenerate the CA bundle</text>
+    <text x="196" y="672" fill="#c7d6cf">update-ca-certificates --fresh → /etc/ssl/certs/ca-certificates.crt</text>
+
+    <rect x="180" y="704" width="420" height="66" rx="10" fill="#18242f" stroke="#33465a"/>
+    <text x="196" y="726" font-size="13" font-weight="700" fill="#4ade80">07 · Restore HTTPS and re-verify</text>
+    <text x="196" y="744" fill="#c7d6cf">HTTPS repositories verified again; signed HTTP kept only when TLS</text>
+    <text x="196" y="760" fill="#c7d6cf">genuinely cannot work on this network</text>
+
+    <rect x="180" y="790" width="420" height="66" rx="10" fill="#18242f" stroke="#33465a"/>
+    <text x="196" y="812" font-size="13" font-weight="700" fill="#4ade80">08 · Final verification</text>
+    <text x="196" y="830" fill="#c7d6cf">curl · wget · CA bundle present · apt metadata candidate exists</text>
+    <text x="196" y="846" fill="#c7d6cf">· package lists populated</text>
+
+    <rect x="180" y="876" width="420" height="56" rx="10" fill="#14231a" stroke="#4ade80" stroke-width="1.5"/>
+    <text x="196" y="898" font-size="13" font-weight="700" fill="#4ade80">Summary box drawn once + full TXT log</text>
+    <text x="196" y="916" fill="#d7e8de">scrollback-safe transcript · ~/.noxs/logs/cert-fix-&lt;timestamp&gt;.txt</text>
+  </g>
+
+  <line x1="390" y1="162" x2="390" y2="180" stroke="#4ade80" stroke-width="2" marker-end="url(#arr3)"/>
+  <line x1="390" y1="232" x2="390" y2="250" stroke="#4ade80" stroke-width="2" marker-end="url(#arr3)"/>
+  <line x1="390" y1="318" x2="390" y2="336" stroke="#4ade80" stroke-width="2" marker-end="url(#arr3)"/>
+  <line x1="390" y1="438" x2="390" y2="476" stroke="#4ade80" stroke-width="2" marker-end="url(#arr3)"/>
+  <text x="400" y="462" font-size="11" fill="#4ade80">yes</text>
+  <line x1="560" y1="388" x2="558" y2="388" stroke="#4ade80" stroke-width="2" opacity="0"/>
+  <path d="M560 388 H 700 V 402 H 742" fill="none" stroke="#4ade80" stroke-width="2" stroke-dasharray="5 4" opacity="0"/>
+  <line x1="390" y1="528" x2="390" y2="546" stroke="#4ade80" stroke-width="2" marker-end="url(#arr3)"/>
+  <line x1="390" y1="614" x2="390" y2="632" stroke="#4ade80" stroke-width="2" marker-end="url(#arr3)"/>
+  <line x1="390" y1="684" x2="390" y2="702" stroke="#4ade80" stroke-width="2" marker-end="url(#arr3)"/>
+  <line x1="390" y1="770" x2="390" y2="788" stroke="#4ade80" stroke-width="2" marker-end="url(#arr3)"/>
+  <line x1="390" y1="856" x2="390" y2="874" stroke="#4ade80" stroke-width="2" marker-end="url(#arr3)"/>
+  <path d="M600 388 H 650 V 460 H 602 V 478 H 602" fill="none" stroke="#4ade80" stroke-width="0" />
+  <path d="M558 388 H 680 V 460" fill="none" stroke="#4ade80" stroke-width="0"/>
+  <line x1="600" y1="388" x2="700" y2="388" stroke="#4ade80" stroke-width="2" stroke-dasharray="5 4"/>
+  <path d="M700 388 V 460 V 503 H 604" fill="none" stroke="#4ade80" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arr3)"/>
+
+  <text x="40" y="962" font-size="11" fill="#8aa39b">Abort paths (busy package manager, sources rewrite failure, no network at all) stop early</text>
+  <text x="40" y="978" font-size="11" fill="#8aa39b">with the real error signature — never a silent partial success.</text>
+</svg>

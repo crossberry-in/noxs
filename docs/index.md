@@ -132,6 +132,8 @@ code-server is running at http://127.0.0.1:8080
 
 </div>
 
+![Noxs architecture — one Android app, one real Debian 12 guest](assets/images/architecture.svg)
+
 ## Getting started
 
 1. Download the latest release installer from
