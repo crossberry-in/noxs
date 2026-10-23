@@ -45,7 +45,7 @@ class NoxsWelcomeTest {
         assertTrue(lib.isFile)
         assertTrue(lib.canExecute())
         assertTrue(lib.readText().contains("noxs_welcome()"))
-        assertEquals("12", RootfsConfigurator.NX_PACKAGE_SYSTEM_VERSION)
+        assertEquals("13", RootfsConfigurator.NX_PACKAGE_SYSTEM_VERSION)
     }
 
     @Test
