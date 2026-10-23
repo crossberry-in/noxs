@@ -278,7 +278,7 @@ case "§{1:-}" in
         . "§NX_LIB_DIR/pkg-install.sh"
         rc=0
         pkg_install_cmd "§@" || rc=$?
-        if [ "§rc" -eq 77 ] && [ "${NOXS_INSTALL_FALLBACK:-1}" != "0" ]; then
+        if [ "§rc" -eq 77 ] && [ "§{NOXS_INSTALL_FALLBACK:-1}" != "0" ]; then
             # Git-registry lookup found no such package — fall through to
             # the distro/mirror installer (nx install curl == nx pkg install
             # curl). Disable with NOXS_INSTALL_FALLBACK=0.
