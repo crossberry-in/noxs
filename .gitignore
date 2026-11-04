@@ -19,6 +19,7 @@ captures/
 
 # Bootstrap staging (large artifacts are produced by scripts/build-rootfs.sh)
 linux-runtime/bootstrap/**/rootfs.tar.*
+app/src/main/assets/bootstrap/**/rootfs.tar.*
 linux-runtime/bootstrap/**/proot
 linux-runtime/bootstrap/**/*.sha256.staged
 
