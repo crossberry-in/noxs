@@ -225,6 +225,9 @@ class SetupActivity : AppCompatActivity() {
     private fun transitionToTerminal() {
         if (transitionStarted) return
         transitionStarted = true
+        // Reflect the finished install in the environment registry right away
+        // so Welcome / Terminal states are consistent within this session.
+        (application as NoxsApplication).environments.importLegacyInstallNow()
         lifecycleScope.launch {
             delay(1_200) // let the success lines be read
             NoxsService.start(this@SetupActivity)

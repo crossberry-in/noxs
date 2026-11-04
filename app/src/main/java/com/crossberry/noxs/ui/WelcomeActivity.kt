@@ -1,9 +1,9 @@
 /*
  * Noxs — original implementation.
- * Welcome screen: entry point. Routes first-time users to the Debian
- * environment installer (one environment — the multi-OS picker was
- * removed), existing users to the terminal, and never silently installs
- * anything (spec §4).
+ * Welcome screen: entry point. Routes first-time users straight to the REAL
+ * setup screen — the terminal console (SetupActivity / NoxsSetupSession)
+ * that streams the actual Debian 12 provisioning — existing users to the
+ * terminal, and never silently installs anything (spec §4).
  */
 package com.crossberry.noxs.ui
 
@@ -35,16 +35,13 @@ class WelcomeActivity : AppCompatActivity() {
         )
 
         binding.btnSetup.setOnClickListener {
+            // No separate Debian download/checklist screen: setup IS the real
+            // terminal console (one environment — Debian 12 bookworm).
             startActivity(
                 Intent(
                     this,
-                    if (ready) SettingsActivity::class.java else EnvironmentInstallActivity::class.java
-                ).apply {
-                    // One environment, one installer: Debian 12 (bookworm).
-                    // The multi-OS picker was removed.
-                    putExtra(EnvironmentInstallActivity.EXTRA_PROVIDER_ID, "debian")
-                    putExtra(EnvironmentInstallActivity.EXTRA_VARIANT_ID, "bookworm")
-                }
+                    if (ready) SettingsActivity::class.java else SetupActivity::class.java
+                )
             )
         }
         binding.btnTerminal.setOnClickListener {

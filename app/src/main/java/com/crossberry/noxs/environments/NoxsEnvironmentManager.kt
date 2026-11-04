@@ -154,6 +154,14 @@ class NoxsEnvironmentManager(private val context: Context) {
         NoxsLog.i("EnvManager", "Existing Debian environment imported (no reinstall required)")
     }
 
+    /**
+     * Re-runs the legacy import on demand: the real setup console completes
+     * outside this manager's init, so a just-finished install must show up
+     * in the registry immediately (Terminal button, active paths) — not only
+     * after the next process start. Idempotent: existing records are kept.
+     */
+    fun importLegacyInstallNow() = importLegacyInstall()
+
     /** Refreshes RUNNING/STOPPED statuses against on-disk reality (honest values). */
     private fun refreshStatuses() {
         val updated = _environments.value.map { env ->
