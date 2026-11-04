@@ -29,7 +29,7 @@ docker run --rm --platform linux/arm64 \
             apt ca-certificates sudo passwd procps locales tzdata \
             nano curl git \
             python3 python3-pip python3-venv \
-            gcc g++ make \
+            gcc g++ make libc6-dev \
             nodejs \
             sqlite3 libsqlite3-dev \
             bash coreutils findutils grep sed gawk \
