@@ -27,7 +27,15 @@
     },
     "generatedAt": { "type": "string" },
     "source": { "type": "string" },
-    "note": { "type": "string" }
+    "note": { "type": "string" },
+    "offline": {
+      "type": "object",
+      "description": "Present when the build embeds the offline Debian bundle in the APK. bundledAsset uses a neutral extension because aapt/AAPT2 decompresses .gz-suffixed assets and strips the suffix at packaging time.",
+      "properties": {
+        "bundledAsset": { "type": "string", "pattern": "^bootstrap/" },
+        "packages": { "type": "array", "items": { "type": "string" } }
+      }
+    }
   },
   "additionalProperties": false
 }

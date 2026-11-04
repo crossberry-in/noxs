@@ -27,7 +27,13 @@ data class BootstrapManifest(
      */
     val proot: BootstrapArtifact? = null,
     val generatedAt: String = "",
-    val source: String = ""
+    val source: String = "",
+    /**
+     * APK asset path of the bundled offline rootfs (manifest key
+     * offline.bundledAsset), e.g. "bootstrap/arm64-v8a/rootfs.bin". Empty for
+     * manifests generated without an offline bundle.
+     */
+    val offlineBundledAsset: String = ""
 ) {
     val isPinned: Boolean get() = rootfs.isPinned
 
@@ -47,12 +53,14 @@ data class BootstrapManifest(
             require(arch in SUPPORTED_ARCHS) { "Unsupported arch: $arch" }
             val rootfsObj = obj["rootfs"] as? Map<*, *> ?: throw IllegalArgumentException("Missing rootfs")
             val prootObj = obj["proot"] as? Map<*, *>
+            val offlineObj = obj["offline"] as? Map<*, *>
             return BootstrapManifest(
                 arch = arch,
                 rootfs = artifact(rootfsObj, "rootfs"),
                 proot = prootObj?.let { artifact(it, "proot") },
                 generatedAt = obj["generatedAt"] as? String ?: "",
-                source = obj["source"] as? String ?: ""
+                source = obj["source"] as? String ?: "",
+                offlineBundledAsset = offlineObj?.get("bundledAsset") as? String ?: ""
             )
         }
 

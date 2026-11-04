@@ -57,6 +57,28 @@ class BootstrapManifestTest {
         assertEquals(null, m.proot)
         assertTrue(m.isPinned)
         assertEquals("tar.gz", m.rootfs.format)
+        assertEquals("", m.offlineBundledAsset)
+    }
+
+    @Test fun `parses offline bundled asset`() {
+        val json = """
+        {
+          "schema": 1,
+          "arch": "arm64-v8a",
+          "rootfs": {
+            "url": "https://example.test/rootfs.tar.gz",
+            "sha256": "",
+            "format": "tar.gz",
+            "sizeBytes": 199725282
+          },
+          "offline": {
+            "bundledAsset": "bootstrap/arm64-v8a/rootfs.bin",
+            "packages": ["nano", "curl"]
+          }
+        }
+        """.trimIndent()
+        val m = BootstrapManifest.parse(json)
+        assertEquals("bootstrap/arm64-v8a/rootfs.bin", m.offlineBundledAsset)
     }
 
     @Test fun `rejects http urls`() {

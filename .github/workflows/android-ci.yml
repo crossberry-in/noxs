@@ -101,7 +101,7 @@ jobs:
         with:
           name: noxs-offline-rootfs-arm64
           path: |
-            app/src/main/assets/bootstrap/arm64-v8a/rootfs.tar.gz
+            app/src/main/assets/bootstrap/arm64-v8a/rootfs.bin
             app/src/main/assets/bootstrap/arm64-v8a/bootstrap.manifest
           retention-days: 3
 
@@ -236,7 +236,9 @@ jobs:
       - name: Stage offline Debian assets
         run: |
           mkdir -p app/src/main/assets/bootstrap/arm64-v8a
-          cp offline-rootfs/rootfs.tar.gz app/src/main/assets/bootstrap/arm64-v8a/rootfs.tar.gz
+          # rootfs.bin is the gzip rootfs under an aapt-safe name: aapt/AAPT2
+          # decompresses .gz assets and strips the suffix at packaging time.
+          cp offline-rootfs/rootfs.bin app/src/main/assets/bootstrap/arm64-v8a/rootfs.bin
           cp offline-rootfs/bootstrap.manifest app/src/main/assets/bootstrap/arm64-v8a/bootstrap.manifest
 
       - name: Resolve release version from tag
@@ -318,9 +320,18 @@ jobs:
           APK="app/build/outputs/apk/release/app-release.apk"
           AAPT="$ANDROID_HOME/build-tools/34.0.0/aapt"
           "$AAPT" dump badging "$APK" | grep -F "package: name='com.crossberry.noxs'" >/dev/null
+          # The bundled asset must be reachable under the manifest's name —
+          # guard against aapt ever resurrecting its .gz handling.
+          unzip -l "$APK" | grep -F "assets/bootstrap/arm64-v8a/rootfs.bin" >/dev/null
           mkdir -p release-assets
           cp "$APK" "release-assets/noxs-${RELEASE_VERSION}.apk"
-          cp offline-rootfs/rootfs.tar.gz "release-assets/noxs-debian-bookworm-arm64.tar.gz"
+          cp offline-rootfs/rootfs.bin "release-assets/noxs-debian-bookworm-arm64.tar.gz"
+          # Publish the checksum sidecar next to the asset so installed APKs
+          # whose embedded manifest pin is stale can still verify downloads.
+          sha256sum offline-rootfs/rootfs.bin \
+            | awk '{print $1"  noxs-debian-bookworm-arm64.tar.gz"}' \
+            > release-assets/noxs-debian-bookworm-arm64.tar.gz.sha256
+          cat release-assets/noxs-debian-bookworm-arm64.tar.gz.sha256
 
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
@@ -334,4 +345,5 @@ jobs:
           files: |
             release-assets/noxs-${{ steps.release_version.outputs.version }}.apk
             release-assets/noxs-debian-bookworm-arm64.tar.gz
+            release-assets/noxs-debian-bookworm-arm64.tar.gz.sha256
           generate_release_notes: true

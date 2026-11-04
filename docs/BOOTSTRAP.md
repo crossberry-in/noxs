@@ -89,7 +89,7 @@ and their complete APT dependency closure into the rootfs before archiving it:
 - `nodejs`
 - `sqlite3`, `libsqlite3-dev`
 
-The generated `rootfs.tar.gz` and SHA-256 manifest are placed in
+The generated archive and SHA-256 manifest are placed in
 `app/src/main/assets/bootstrap/arm64-v8a/` before Gradle packages the APK.
 The archive is a CI product and is intentionally Git-ignored; it is not
 committed to the source repository. The installer prefers this bundled image,
@@ -97,11 +97,25 @@ verifies its digest, replaces any stale cached rootfs, and skips the network
 APT bootstrap. It then performs the normal Noxs safe extraction, Debian user
 creation, password prompt, and runtime configuration.
 
-The release workflow also publishes
-`noxs-debian-bookworm-arm64.tar.gz` beside the APK. The manifest points to
-that release asset as a verified fallback for a build where the APK asset is
-not present. On devices without an ARM64 bundle, the existing pinned network
-bootstrap remains available.
+**Asset naming (important).** The archive is bundled as `rootfs.bin`, not
+`rootfs.tar.gz`: aapt/AAPT2 decompresses `.gz`-suffixed assets and strips the
+suffix at packaging time, so a `rootfs.tar.gz` asset would arrive in the APK
+as an uncompressed `rootfs.tar` the installer can neither find nor verify
+(first launch would silently fall back to a 190 MB download). The manifest
+records the bundled path under `offline.bundledAsset`. Tar (`--sort=name`,
+fixed `--mtime`, `--owner=0`) and `gzip -n` are run reproducibly so identical
+inputs produce identical SHA-256 digests across CI runs.
+
+The release workflow also publishes `noxs-debian-bookworm-arm64.tar.gz` plus
+its `.sha256` sidecar beside the APK. The manifest points to that release
+asset as a verified fallback for a build where the APK asset is not present.
+When a downloaded asset does not match the APK's embedded pin (a stale pin
+from an earlier CI run), the installer consults the release's `.sha256`
+sidecar and accepts the bytes when they match it, logging the decision. On
+devices without an ARM64 bundle, the existing pinned network bootstrap
+remains available. Partial downloads carry a `.part.meta` sidecar (url +
+expected digest) so a stale partial from an older release is never resumed
+into the new asset's byte stream.
 
 The installed package binaries are ready offline on first launch. Installing
 additional packages or refreshing APT indexes still requires network access

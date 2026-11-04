@@ -281,7 +281,10 @@ class NoxsSetupSession(
         NoxsSetupEventLog.append(eventFile, NoxsSetupEventLog.Event(
             NoxsSetupEventLog.OUTPUT_TICK, 5, note = "download $pct%"))
         if (doneBytes >= totalBytes && totalBytes > 0) {
-            endLiveLine(" \u001b[1;32mok (${mb(totalBytes)} MB, SHA-256 verified)\u001b[0m")
+            // Honest wording: bytes are complete, the SHA-256 check happens in
+            // the installer right after and logs its own verdict line — this
+            // line must not claim "verified" before that check ran.
+            endLiveLine(" \u001b[1;32mok (${mb(totalBytes)} MB, checking SHA-256)\u001b[0m")
         } else {
             // Pick the most informative progress body that still fits the
             // real terminal width — a wrapping live line would flood.
