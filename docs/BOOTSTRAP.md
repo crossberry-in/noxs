@@ -28,7 +28,8 @@ Noxs logo → "Linux environment setup"
   → storage initialization (filesDir/noxs/{rootfs,bin,run,cache,logs,tmp})
   → bootstrap manifest load (assets/bootstrap/<arch>/bootstrap.manifest)
   → proot presence check  (bundled jniLibs → nativeLibraryDir; no network)
-  → rootfs download       → SHA-256 verify → stage → rename (3 retries)
+  → bundled rootfs copy   → SHA-256 verify → stage → rename (offline ARM64)
+    (network download + resume remains the fallback for ABIs without a bundle)
   → safe extraction       (TarGuard: traversal/absolute/symlink/device/bomb defense)
   → Debian configuration  (FHS dirs, profile.d, apt, DNS, motd, noxs CLI)
   → noxs user creation    (passwd/group/shadow + sudo group)
@@ -76,12 +77,35 @@ The signed APT/CA/TLS bootstrap never blocks the shell:
   Storage → "Reset Linux environment".
 - Cached archives under `filesDir/noxs/cache` are reused across retries.
 
-## Offline-first
+## Fully offline Debian 12 (ARM64)
 
-After the one-time bootstrap, normal operation (terminal, sockets, services,
-code-server) needs no network. `apt install` naturally needs Debian mirrors.
-For fully offline distribution, build with `scripts/build-rootfs.sh --bundle`
-and ship the staged tarball inside the APK assets.
+Every Android CI build first runs `scripts/build-offline-rootfs.sh` under
+ARM64 emulation. The script installs the following Debian Bookworm packages
+and their complete APT dependency closure into the rootfs before archiving it:
+
+- `nano`, `curl`, `git`
+- `python3`, `python3-pip`, `python3-venv`
+- `gcc`, `g++`, `make`
+- `nodejs`
+- `sqlite3`, `libsqlite3-dev`
+
+The generated `rootfs.tar.gz` and SHA-256 manifest are placed in
+`app/src/main/assets/bootstrap/arm64-v8a/` before Gradle packages the APK.
+The archive is a CI product and is intentionally Git-ignored; it is not
+committed to the source repository. The installer prefers this bundled image,
+verifies its digest, replaces any stale cached rootfs, and skips the network
+APT bootstrap. It then performs the normal Noxs safe extraction, Debian user
+creation, password prompt, and runtime configuration.
+
+The release workflow also publishes
+`noxs-debian-bookworm-arm64.tar.gz` beside the APK. The manifest points to
+that release asset as a verified fallback for a build where the APK asset is
+not present. On devices without an ARM64 bundle, the existing pinned network
+bootstrap remains available.
+
+The installed package binaries are ready offline on first launch. Installing
+additional packages or refreshing APT indexes still requires network access
+unless those package archives and indexes are separately mirrored.
 
 ## ARM64 optimization
 
