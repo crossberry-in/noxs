@@ -16,6 +16,7 @@
 package com.crossberry.noxs.runtime
 
 import com.crossberry.noxs.shared.NoxsLog
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,6 +59,10 @@ object NoxsAptSetup {
     @Synchronized
     fun startIfInstalled(paths: NoxsPaths, launcher: ProotLauncher, scope: CoroutineScope) {
         if (!paths.isInstalled()) return
+        if (File(paths.base, "offline-packages-v1.ready").isFile && !paths.aptReadyMarker.isFile) {
+            NoxsLog.i("AptSetup", "automatic APT network bootstrap deferred for bundled offline Debian")
+            return
+        }
         when (_state.value) {
             State.RUNNING -> return
             State.READY -> if (paths.aptReadyMarker.isFile) return
