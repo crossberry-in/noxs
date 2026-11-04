@@ -45,6 +45,7 @@ docker run --rm --platform linux/arm64 \
             --exclude=./var/cache/apt/archives/\* \
             --exclude=./var/lib/apt/lists/\* \
             -czf /noxs-out/rootfs.tar.gz -C / .
+        chown "$(stat -c %u:%g /noxs-out)" /noxs-out/rootfs.tar.gz
     '
 
 ARCHIVE="$ASSET_DIR/rootfs.tar.gz"
