@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2034,SC2317
+# shellcheck disable=SC2034,SC2317,SC2329
 # scripts/test-code-cli.sh — functional tests for the `noxs code` lifecycle.
 # Fully sandboxed: every path is env-overridden and code-server itself is a
 # stub (a python http.server), so no real download or install happens here
