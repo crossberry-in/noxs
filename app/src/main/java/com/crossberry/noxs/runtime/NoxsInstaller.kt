@@ -117,7 +117,13 @@ class NoxsInstaller(
             progress.onStep(5, R.string.setup_step_rootfs, "")
             val rootfsArchive = File(paths.cache, "rootfs-$arch.tar.${manifest.rootfs.format.substringAfter('.')}")
             var sha = ""
-            if (!rootfsArchive.isFile) {
+            // Prefer the complete rootfs embedded in release APKs. This also
+            // replaces a stale cached image, so first launch is truly offline.
+            val bundledRootfs = copyBundledRootfs(arch, rootfsArchive, manifest.rootfs.sha256)
+            if (bundledRootfs != null) {
+                sha = bundledRootfs
+                progress.onLog("offline Debian rootfs loaded from APK assets")
+            } else if (!rootfsArchive.isFile) {
                 acquire(manifest.rootfs, rootfsArchive, progress) { staged, expected ->
                     val v = verify(staged, expected, "rootfs")
                     sha = (v as? Verify.Ok)?.sha256 ?: sha
@@ -150,6 +156,23 @@ class NoxsInstaller(
                 beforeEntry = { checkCancelled() }
             )
             progress.onLog("extracted files=${stats.files} dirs=${stats.dirs} links=${stats.links}")
+            if (bundledRootfs != null) {
+                val required = listOf(
+                    "usr/bin/nano", "usr/bin/curl", "usr/bin/git",
+                    "usr/bin/python3", "usr/bin/gcc", "usr/bin/g++",
+                    "usr/bin/make", "usr/bin/node", "usr/bin/sqlite3"
+                )
+                val missing = required.filterNot { File(paths.rootfs, it).exists() }
+                val pipPresent = File(paths.rootfs, "usr/bin/pip").exists() ||
+                    File(paths.rootfs, "usr/bin/pip3").exists()
+                if (missing.isNotEmpty() || !pipPresent) {
+                    throw java.io.IOException(
+                        "Offline Debian package verification failed: " +
+                            (missing + if (pipPresent) emptyList() else listOf("pip")).joinToString()
+                    )
+                }
+                progress.onLog("offline packages verified: nano curl git python3 pip gcc g++ make nodejs sqlite3")
+            }
 
             // 7 — userspace configuration. APT remains on signed HTTP only
             // during the CA-certificate bootstrap; final HTTPS is enabled later.
@@ -181,13 +204,19 @@ class NoxsInstaller(
             // launch until it succeeds.
             checkCancelled()
             progress.onStep(10, R.string.setup_step_apt, "")
-            val aptResult = NoxsAptBootstrapper(paths, launcher, isCancelled).initialize(
-                force = true,
-                onLog = progress::onLog
-            )
-            if (!aptResult.success) {
-                NoxsLog.e("Installer", "APT bootstrap unfinished; deferring to background repair: ${aptResult.detail}")
-                progress.onLog("APT security setup will continue in the background")
+            if (bundledRootfs != null) {
+                // The bundled image already contains the requested packages.
+                // Do not block an offline first launch on network APT metadata.
+                progress.onLog("offline package set is ready; network APT bootstrap skipped")
+            } else {
+                val aptResult = NoxsAptBootstrapper(paths, launcher, isCancelled).initialize(
+                    force = true,
+                    onLog = progress::onLog
+                )
+                if (!aptResult.success) {
+                    NoxsLog.e("Installer", "APT bootstrap unfinished; deferring to background repair: ${aptResult.detail}")
+                    progress.onLog("APT security setup will continue in the background")
+                }
             }
 
             // marker
@@ -229,6 +258,39 @@ class NoxsInstaller(
     }
 
     private var progress0: Progress? = null
+
+    /**
+     * Copies and verifies the prebuilt Debian image shipped in APK assets.
+     * Returns null when this ABI/build has no offline bundle, preserving the
+     * existing resumable network bootstrap as the fallback.
+     */
+    private fun copyBundledRootfs(arch: String, dest: File, expectedSha: String): String? {
+        val assetName = "bootstrap/$arch/rootfs.tar.gz"
+        val available = runCatching {
+            context.assets.open(assetName).use { }
+            true
+        }.getOrDefault(false)
+        if (!available) return null
+
+        dest.parentFile?.mkdirs()
+        val staged = File(dest.absolutePath + ".bundled.part")
+        if (staged.exists()) staged.delete()
+
+        context.assets.open(assetName).use { input ->
+            FileOutputStream(staged).use { output -> input.copyTo(output) }
+        }
+
+        val verified = verify(staged, expectedSha, "bundled-rootfs") as Verify.Ok
+        if (dest.exists() && !dest.delete()) {
+            staged.delete()
+            throw java.io.IOException("cannot replace cached rootfs archive")
+        }
+        if (!staged.renameTo(dest)) {
+            staged.copyTo(dest, overwrite = true)
+            staged.delete()
+        }
+        return verified.sha256
+    }
 
     private fun verify(file: File, expectedSha: String, label: String): Verify {
         if (expectedSha.isBlank()) {
