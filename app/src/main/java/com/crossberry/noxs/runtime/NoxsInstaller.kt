@@ -205,8 +205,13 @@ class NoxsInstaller(
             checkCancelled()
             progress.onStep(10, R.string.setup_step_apt, "")
             if (bundledRootfs != null) {
-                // The bundled image already contains the requested packages.
-                // Do not block an offline first launch on network APT metadata.
+                // The bundle already contains CA certificates and the requested
+                // packages. Switch sources to HTTPS, but defer apt update until
+                // the user explicitly requests it or a network is available.
+                RootfsConfigurator.configureAptSources(paths, useHttps = true)
+                File(paths.base, "offline-packages-v1.ready").writeText(
+                    "installed=${System.currentTimeMillis()}\nrootfs_sha256=$sha\n"
+                )
                 progress.onLog("offline package set is ready; network APT bootstrap skipped")
             } else {
                 val aptResult = NoxsAptBootstrapper(paths, launcher, isCancelled).initialize(
