@@ -39,7 +39,8 @@ docker run --rm --platform linux/arm64 \
         mkdir -p /home/noxs /run /tmp /dev /proc /sys
         chmod 1777 /tmp
         tar --numeric-owner --xattrs --acls \
-            --exclude=./dev/\* --exclude=./proc/\* --exclude=./sys/\* \
+            --exclude=./noxs-out --exclude=./dev/\* \
+            --exclude=./proc/\* --exclude=./sys/\* \
             --exclude=./run/\* --exclude=./tmp/\* \
             --exclude=./var/cache/apt/archives/\* \
             --exclude=./var/lib/apt/lists/\* \
