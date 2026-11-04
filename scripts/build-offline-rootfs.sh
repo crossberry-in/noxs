@@ -38,13 +38,23 @@ docker run --rm --platform linux/arm64 \
         rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
         mkdir -p /home/noxs /run /tmp /dev /proc /sys
         chmod 1777 /tmp
+        # proc/sysfs/devtmpfs mutate while being read, so tar must never walk
+        # them ("file changed as we read it" -> exit 1). Exclude the mount
+        # points from the walk, then append empty ones from a plain staging
+        # directory so the archive still carries /dev /proc /sys for proot.
+        rm -f /noxs-out/rootfs.tar
         tar --numeric-owner --xattrs --acls \
-            --exclude=./noxs-out --exclude=./dev/\* \
-            --exclude=./proc/\* --exclude=./sys/\* \
-            --exclude=./run/\* --exclude=./tmp/\* \
-            --exclude=./var/cache/apt/archives/\* \
-            --exclude=./var/lib/apt/lists/\* \
-            -czf /noxs-out/rootfs.tar.gz -C / .
+            --exclude=./noxs-out \
+            --exclude=./dev --exclude=./proc --exclude=./sys \
+            --exclude=./run/* --exclude=./tmp/* \
+            --exclude=./var/cache/apt/archives/* \
+            --exclude=./var/lib/apt/lists/* \
+            -cf /noxs-out/rootfs.tar -C / .
+        mkdir -p /tmp/noxs-mounts/dev /tmp/noxs-mounts/proc /tmp/noxs-mounts/sys
+        tar --numeric-owner -rf /noxs-out/rootfs.tar \
+            -C /tmp/noxs-mounts ./dev ./proc ./sys
+        rm -rf /tmp/noxs-mounts
+        gzip -f /noxs-out/rootfs.tar
         chown "$(stat -c %u:%g /noxs-out)" /noxs-out/rootfs.tar.gz
     '
 
