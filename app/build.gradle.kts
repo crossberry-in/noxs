@@ -44,8 +44,11 @@ android {
         // Release signing via environment variables (CI). Falls back to debug
         // identity so `assembleRelease` always produces an artifact.
         create("release") {
+            // CI exports NOXS_KEYSTORE_FILE even when no keystore secret is
+            // configured (empty string) — treat empty as unset, or file("")
+            // throws "path may not be null or empty string" at configure time.
             val ks = System.getenv("NOXS_KEYSTORE_FILE")
-            if (ks != null && file(ks).exists()) {
+            if (!ks.isNullOrEmpty() && file(ks).exists()) {
                 storeFile = file(ks)
                 storePassword = System.getenv("NOXS_KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("NOXS_KEY_ALIAS")
@@ -63,7 +66,7 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             val ks = System.getenv("NOXS_KEYSTORE_FILE")
-            signingConfig = if (ks != null && file(ks).exists()) signingConfigs.getByName("release")
+            signingConfig = if (!ks.isNullOrEmpty() && file(ks).exists()) signingConfigs.getByName("release")
             else signingConfigs.getByName("debug")
         }
     }
