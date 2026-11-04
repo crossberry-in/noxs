@@ -52,7 +52,7 @@ docker run --rm --platform linux/arm64 \
         # directory so the archive still carries /dev /proc /sys for proot.
         rm -f /noxs-out/rootfs.tar /noxs-out/rootfs.bin
         tar --numeric-owner --xattrs --acls \
-            --sort=name --mtime='UTC 2026-01-01' --owner=0 --group=0 \
+            --sort=name --mtime=@0 --owner=0 --group=0 \
             --exclude=./noxs-out \
             --exclude=./dev --exclude=./proc --exclude=./sys \
             --exclude=./run/* --exclude=./tmp/* \
@@ -60,7 +60,7 @@ docker run --rm --platform linux/arm64 \
             --exclude=./var/lib/apt/lists/* \
             -cf /noxs-out/rootfs.tar -C / .
         mkdir -p /tmp/noxs-mounts/dev /tmp/noxs-mounts/proc /tmp/noxs-mounts/sys
-        tar --numeric-owner --mtime='UTC 2026-01-01' -rf /noxs-out/rootfs.tar \
+        tar --numeric-owner --mtime=@0 -rf /noxs-out/rootfs.tar \
             -C /tmp/noxs-mounts ./dev ./proc ./sys
         rm -rf /tmp/noxs-mounts
         # gzip -n: no mtime/name in the header (byte-reproducible output)
