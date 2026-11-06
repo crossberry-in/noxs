@@ -81,6 +81,28 @@ class NoxsApplication : Application() {
         )
     }
 
+    /**
+     * NoxOS VM lifecycle manager (Noxs × NoxOS M2). Application-scoped like
+     * the code-server manager: the VM process must survive Activity
+     * recreation, and duplicate-start prevention is process-wide.
+     */
+    val emulator: com.crossberry.noxs.emulator.NoxOsEmulatorManager by lazy {
+        com.crossberry.noxs.emulator.NoxOsEmulatorManager(
+            pathsProvider = { environments.activePaths() },
+            launcherProvider = {
+                val p = environments.activePaths()
+                if (p.isInstalled()) {
+                    com.crossberry.noxs.runtime.NoxsRuntimeFactory.launcher(
+                        p, com.crossberry.noxs.runtime.NoxsResources(p)
+                    )
+                } else {
+                    null
+                }
+            },
+            assetsProvider = { assets }
+        )
+    }
+
     override fun onCreate() {
         super.onCreate()
         paths = NoxsPaths(this)

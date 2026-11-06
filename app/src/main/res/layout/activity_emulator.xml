@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  NoxOS emulator window (Noxs × NoxOS M2/M6/M7).
+  Section order: top bar (title / logs / keyboard / power) → VM display
+  (letterboxed framebuffer image) → status overlay (boot/install/progress)
+  → extra keys row. The display area is portrait like the guest framebuffer
+  (720×1280) and letterboxes to the actual screen.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#000000">
+
+    <!-- A. Top bar -->
+    <LinearLayout
+        android:id="@+id/emulator_top_bar"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="10dp"
+        android:paddingEnd="4dp"
+        android:background="@color/noxs_panel">
+
+        <TextView
+            android:id="@+id/emulator_title"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="@string/title_emulator"
+            android:textColor="@color/noxs_text"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:singleLine="true"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/btn_vm_logs"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:gravity="center"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:text="≡"
+            android:textColor="@color/noxs_text_dim"
+            android:textSize="18sp"
+            android:contentDescription="@string/emulator_logs" />
+
+        <TextView
+            android:id="@+id/btn_vm_keyboard"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:gravity="center"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:text="⌨"
+            android:textColor="@color/noxs_text_dim"
+            android:textSize="18sp"
+            android:contentDescription="@string/emulator_keyboard" />
+
+        <TextView
+            android:id="@+id/btn_vm_power"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:gravity="center"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:text="⏻"
+            android:textColor="@color/noxs_warning"
+            android:textSize="18sp"
+            android:contentDescription="@string/emulator_power_off" />
+    </LinearLayout>
+
+    <!-- B. Display + status overlay -->
+    <FrameLayout
+        android:id="@+id/emulator_display_area"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <ImageView
+            android:id="@+id/emulator_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitCenter"
+            android:contentDescription="@string/emulator_display" />
+
+        <!-- Status overlay: visible while preparing / installing / booting /
+             failed; hidden while the VM display is live. -->
+        <LinearLayout
+            android:id="@+id/emulator_overlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="24dp"
+            android:background="#000000">
+
+            <TextView
+                android:id="@+id/emulator_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/emulator_status_idle"
+                android:textColor="@color/noxs_text"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:gravity="center" />
+
+            <TextView
+                android:id="@+id/emulator_status_detail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="@color/noxs_text_dim"
+                android:textSize="13sp"
+                android:gravity="center"
+                android:singleLine="false"
+                android:maxLines="4"
+                android:ellipsize="end" />
+
+            <ProgressBar
+                android:id="@+id/emulator_progress"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:indeterminate="true" />
+
+            <TextView
+                android:id="@+id/emulator_install_lines"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:fontFamily="monospace"
+                android:textSize="11sp"
+                android:textColor="@color/noxs_text_dim"
+                android:maxLines="8"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/btn_vm_retry"
+                style="@style/Text.Noxs.PillButton"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:layout_marginTop="18dp"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:background="@drawable/bg_pill_accent"
+                android:text="@string/emulator_retry"
+                android:textColor="@color/noxs_on_accent"
+                android:visibility="gone" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- C. Extra keys row (guest-facing keys the Android IME lacks) -->
+    <HorizontalScrollView
+        android:id="@+id/emulator_keys_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:background="@color/noxs_panel">
+
+        <LinearLayout
+            android:id="@+id/emulator_keys_row"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp">
+
+            <TextView
+                android:id="@+id/key_esc"
+                style="@style/Text.Noxs.PillButton"
+                android:layout_width="52dp"
+                android:layout_height="32dp"
+                android:background="@drawable/bg_pill"
+                android:text="Esc" />
+
+            <TextView
+                android:id="@+id/key_tab"
+                style="@style/Text.Noxs.PillButton"
+                android:layout_width="52dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_pill"
+                android:text="Tab" />
+
+            <TextView
+                android:id="@+id/key_ctrl"
+                style="@style/Text.Noxs.PillButton"
+                android:layout_width="52dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_pill"
+                android:text="Ctrl" />
+
+            <TextView
+                android:id="@+id/key_up"
+                style="@style/Text.Noxs.PillButton"
+                android:layout_width="40dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_pill"
+                android:text="↑" />
+
+            <TextView
+                android:id="@+id/key_down"
+                style="@style/Text.Noxs.PillButton"
+                android:layout_width="40dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_pill"
+                android:text="↓" />
+
+            <TextView
+                android:id="@+id/key_left"
+                style="@style/Text.Noxs.PillButton"
+                android:layout_width="40dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_pill"
+                android:text="←" />
+
+            <TextView
+                android:id="@+id/key_right"
+                style="@style/Text.Noxs.PillButton"
+                android:layout_width="40dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_pill"
+                android:text="→" />
+
+            <TextView
+                android:id="@+id/key_home"
+                style="@style/Text.Noxs.PillButton"
+                android:layout_width="56dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_pill"
+                android:text="Home" />
+
+            <TextView
+                android:id="@+id/key_end"
+                style="@style/Text.Noxs.PillButton"
+                android:layout_width="52dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_pill"
+                android:text="End" />
+
+            <TextView
+                android:id="@+id/key_pageup"
+                style="@style/Text.Noxs.PillButton"
+                android:layout_width="56dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_pill"
+                android:text="PgUp" />
+
+            <TextView
+                android:id="@+id/key_pagedown"
+                style="@style/Text.Noxs.PillButton"
+                android:layout_width="56dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_pill"
+                android:text="PgDn" />
+        </LinearLayout>
+    </HorizontalScrollView>
+</LinearLayout>

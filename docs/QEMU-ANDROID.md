@@ -108,3 +108,73 @@ tools/emulator/validate_runtime_gate.sh /path/to/NoxOS
 
 Requires: `python3`, `dpkg-deb`, network access to `deb.debian.org`,
 the NoxOS checkout with a working Rust toolchain for the release gate.
+
+---
+
+# M2 — On-device runtime integration (2026-11-07)
+
+M2 wires the M1-verified runtime into the app: a sidebar entry
+("NoxOS") opens a dedicated emulator window that AUTO-BOOTS the VM and
+renders the guest display through a localhost VNC bridge.
+
+## What was built
+
+| Layer | File(s) | Role |
+|---|---|---|
+| Pure VM core (JVM-tested) | `noxs-shared/.../shared/emulator/QemuCommand.kt` | The exact device argv (M1 device set + `-vnc 127.0.0.1:<n>` + `-serial file:`) |
+| | `.../emulator/Rfb.kt` | RFB 3.8 codec: handshake, pixel format, raw decode → ARGB, key/pointer messages |
+| | `.../emulator/Keysym.kt`, `VmMemoryPolicy.kt` | X11 keysym table; guest RAM sizing from /proc/meminfo |
+| Lifecycle manager | `app/.../emulator/NoxOsEmulatorManager.kt` | VM dirs + `vm.json` + kernel provisioning from APK assets; one-time `apt-get install qemu-system-arm` (M1 closure seed) streamed live; dedicated long-lived proot process (VM dir bound at `/noxs-vm`); free loopback display pick (1..9); VNC-readiness wait (90 s); stop; pid verified against /proc |
+| Display bridge | `app/.../emulator/VncClient.kt` | RFB 3.8 socket client on 127.0.0.1 ONLY; raw encoding; DesktopResize handling; per-rect ARGB snapshots |
+| Emulator window | `app/.../emulator/EmulatorActivity.kt` + `activity_emulator.xml` | auto-boot on open; letterboxed framebuffer; touch → VNC pointer; IME/extra keys → VNC keysyms; sticky Ctrl; power-off; log viewer |
+| Entry points | drawer `nav_noxos` (TerminalActivity), manifest, `NoxsApplication.emulator` | sidebar option → emulator window (auto-boot) |
+| Guest kernel | `app/src/main/assets/noxos/noxos-kernel-0.9.0` | 273,032-byte release ELF, SHA-256 `086c170be93e734d44e57617220be1474eb48df5323219191b8e0a3358231fed` (M1-verified artifact) |
+
+## Verified on real bookworm QEMU 7.2.22 (dev-host evidence)
+
+`tools/emulator/verify_vnc_path.py` runs the EXACT M2 device argv and
+the SAME RFB sequence the Android client implements:
+
+```
+VERIFY-VNC-PATH RESULT: PASS
+[vnc] ServerInit ok: 720x1280 (at connect) name='QEMU'
+[vnc] settled framebuffer: 720x1280 via DesktopResize
+[vnc] decoded raw rects: 2 frames, 1843200 pixels
+[vnc] input events accepted (ENTER down/up, pointer press/release)
+[serial] ok: DTB ok: / MMU enabled: true / BOOT SMOKE SEQUENCE COMPLETE
+[pidfile] QEMU pid written: 6040
+```
+
+The decoded framebuffer (a REAL capture through the VNC path, not a
+QMP screendump) shows the NoxOS lock/home screen — saved as
+`tools/emulator/logs/vnc-display-path.png`.
+
+Two real-world protocol behaviors surfaced and are handled by the
+client exactly as the harness does:
+
+1. **Console race at connect time**: a client connecting within the
+   first second of QEMU's life can see the pre-init 640×480 surface.
+   The guest's 720×1280 scanout then arrives as the DesktopResize
+   pseudo-encoding (`-223`) — `VncClient` reallocates on it, and the
+   manager's boot wait only declares Running after the port answers,
+   so the window resolves the surface on its own updates.
+2. **Damage-rect streaming**: after the first full update the client
+   requests incremental updates per frame (measured: hundreds of small
+   raw rects during UI animation).
+
+## Honest status (M2)
+
+- **Implemented with limitations.** The Kotlin sources compile in CI
+  (GitHub Actions APK build); the pure logic is unit tested
+  (`QemuCommandTest`, `RfbTest`, `KeysymTest`, `VmMemoryPolicyTest`,
+  `VmConfigJsonTest`). The QEMU command set and the VNC protocol path
+  are verified against real QEMU 7.2.22 (above). What is NOT yet
+  verified: running the app on an Android device/emulator (M9 gates),
+  real touch performance, and the apt-install flow under proot on a
+  device (rootfs network + dpkg behavior match M1's closure data but
+  the end-to-end path needs M9 evidence).
+- The VM dies with the app process (background lifecycle = M8).
+- One VM ("noxos"), no snapshots/pause-resume yet (M4+).
+- Guest has no ACPI poweroff: power-off terminates the QEMU process
+  (guest-side clean shutdown is a NoxOS-kernel feature, kept out of
+  Noxs per the integration rule).

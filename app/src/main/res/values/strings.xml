@@ -574,6 +574,27 @@
 <!-- Editor: code-server (VS Code Server) workspace rendered in a WebView -->
     <string name="title_editor">Editor</string>
     <string name="nav_editor">Editor</string>
+
+<!-- NoxOS emulator (Noxs × NoxOS integration, M2+) -->
+    <string name="nav_noxos">NoxOS</string>
+    <string name="title_emulator">NoxOS Emulator</string>
+    <string name="emulator_status_idle">NoxOS is ready to boot</string>
+    <string name="emulator_status_preparing">Preparing the VM…</string>
+    <string name="emulator_status_installing">Installing the QEMU runtime (one-time, Debian apt)…</string>
+    <string name="emulator_status_booting">Booting NoxOS…</string>
+    <string name="emulator_status_running">NoxOS is running — tap the display to interact</string>
+    <string name="emulator_status_stopped">VM stopped</string>
+    <string name="emulator_status_failed">VM failed to start</string>
+    <string name="emulator_retry">Try again</string>
+    <string name="emulator_power_off">Power off VM</string>
+    <string name="emulator_power_confirm">Stop the NoxOS VM? The guest is not suspended and anything in memory is lost.</string>
+    <string name="emulator_keyboard">Toggle keyboard</string>
+    <string name="emulator_logs">VM logs</string>
+    <string name="emulator_logs_title">VM logs (tail)</string>
+    <string name="emulator_display">NoxOS display</string>
+    <string name="emulator_setup_required">The Noxs Linux environment is not set up yet. Open the terminal setup first, then boot NoxOS.</string>
+    <string name="emulator_stops_on_exit">Note: the VM keeps running while Noxs is alive; it stops if Android kills the app (background handling arrives in M8).</string>
+
     <string name="action_back">‹</string>
     <string name="editor_open_terminal">Open in Terminal</string>
     <string name="editor_action_reload">Reload</string>

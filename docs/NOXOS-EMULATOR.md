@@ -1,7 +1,12 @@
 # NoxOS Emulator (Noxs × NoxOS integration)
 
-**Status: M1 of M10 complete — QEMU runtime compatibility verified on the
-Debian baseline.** The Android-device milestone (M2+) is not started yet.
+**Status: M1 complete + M2 core implemented (sidebar entry → auto-boot →
+VNC display window).** The QEMU command set and the RFB display path are
+verified on real Debian bookworm QEMU 7.2.22
+(`tools/emulator/verify_vnc_path.py`, `tools/emulator/logs/vnc-display-path.png`).
+On-device (Android) verification is M9; everything below follows the
+four-level honesty classification — nothing is called "working" without
+test evidence.
 
 Noxs (the Android host) will run the real NoxOS guest operating system
 (https://github.com/crossberry-in/NoxOS) inside a QEMU virtual machine.
@@ -13,13 +18,15 @@ emulator is an isolated subsystem inside the same app.
 ```
 Android Application
 |
-+-- Noxs UI (sidebar: "NoxOS Emulator" + VM dashboard)          M2/M7
-+-- EmulatorManager (VM lifecycle, process owner)               M2
++-- Noxs UI (sidebar: "NoxOS" → emulator window, auto-boot)     M2 ✅ (device-test pending)
++-- EmulatorManager (VM lifecycle, process owner)               M2 ✅ (device-test pending)
++-- Display Bridge (VNC localhost, raw + resize)                M6 ✅ protocol-verified
++-- Touch and keyboard (pointer + keysyms, sticky Ctrl)         M7 ✅ protocol-verified
 +-- QEMU Runtime (qemu-system-aarch64, TCG, bookworm)           M1 ✅
-+-- Virtual Machine Manager (config, limits, timeouts)          M2/M8
-+-- Virtual Storage (app-private VM disks)                      M3/M4
-+-- Display Bridge (serial console → VNC localhost)             M5/M6
-+-- Serial Console (boot log, guest log)                        M5
++-- Virtual Machine Manager (config.json, memory policy)        M2 ✅ (JVM-tested)
++-- Serial console UI (serial.log captured; viewer = M5)        M5 ◐ partial
++-- Virtual Storage (SAF import M3, disks M4)                   planned
++-- Background lifecycle (Activity Center)                      planned (M8)
 +-- NoxOS Guest (aarch64 kernel, virtio devices)                verified
 ```
 
@@ -65,12 +72,12 @@ only).
 | # | Milestone | Status | Evidence |
 |---|---|---|---|
 | M1 | QEMU runtime compatibility | **done (host-verified)** | `docs/QEMU-ANDROID.md`, `tools/emulator/` |
-| M2 | Emulator process manager (EmulatorManager) | planned | — |
+| M2 | Emulator process manager (EmulatorManager) | **implemented with limitations** — CI compile + JVM tests pending push; device run pending M9 | `NoxOsEmulatorManager.kt`, `VmStorage.kt`, `VmConfigJson.kt` |
 | M3 | NoxOS image import (SAF, validation) | planned | — |
 | M4 | Virtual disk persistence | planned | — |
-| M5 | Serial console UI | planned | — |
-| M6 | Graphical display (VNC localhost) | planned | — |
-| M7 | Touch and keyboard | planned | — |
+| M5 | Serial console UI | **partial** — serial.log captured by the VM; viewer UI pending | `logs/serial.log`, log tail in the emulator window |
+| M6 | Graphical display (VNC localhost) | **implemented with limitations** — RFB 3.8 path verified on real QEMU 7.2.22; Android rendering compile pending CI | `VncClient.kt`, `verify_vnc_path.py`, `logs/vnc-display-path.png` |
+| M7 | Touch and keyboard | **implemented with limitations** — pointer/keysym protocol verified; device UX pending M9 | `EmulatorActivity.kt`, `Keysym.kt` |
 | M8 | Background lifecycle (Activity Center) | planned | — |
 | M9 | Automated Android tests | planned | — |
 | M10 | Documentation and release | planned | — |
@@ -82,8 +89,24 @@ limitations*, *experimental*, or *planned / not implemented* — never
 
 ## Related docs
 
-- `docs/QEMU-ANDROID.md` — the M1 runtime compatibility study (this
-  milestone's evidence).
+- `docs/QEMU-ANDROID.md` — M1 runtime compatibility study + the M2
+  integration section (this milestone's evidence).
+- `tools/emulator/verify_vnc_path.py` — M2 display-bridge verification
+  harness (mirrors the Kotlin RFB client byte-for-byte).
 - `docs/VM-STORAGE.md`, `docs/EMULATOR-DISPLAY.md`,
   `docs/ANDROID-PERMISSIONS.md` — added with their milestones (M4, M6,
   M8).
+
+## M2 quick facts
+
+- Sidebar: **NoxOS** row in the terminal drawer → opens the emulator
+  window → the VM boots automatically (dirs → `vm.json` → kernel asset
+  → one-time apt install of `qemu-system-arm` → QEMU on a free
+  127.0.0.1 VNC display → window connects).
+- VM storage: `files/noxs/virtual-machines/noxos/` (`vm.json`,
+  `kernel/`, `disks/`, `logs/serial.log`, `logs/qemu.log`); the VM dir
+  is bind-mounted at `/noxs-vm` inside the proot rootfs — QEMU never
+  sees an Android path.
+- Guest RAM: 256/384/512 MiB by `/proc/meminfo` tier (`VmMemoryPolicy`).
+- Display: VNC bound to 127.0.0.1 only, no auth (localhost-only per
+  spec), raw encoding, guest framebuffer 720×1280.
