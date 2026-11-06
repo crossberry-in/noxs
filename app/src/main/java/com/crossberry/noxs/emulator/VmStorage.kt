@@ -96,7 +96,7 @@ class VmStorage(paths: NoxsPaths) {
                 val buf = ByteArray((bytes - start).toInt())
                 raf.readFully(buf)
                 String(buf, Charsets.UTF_8)
-            }.lineSequence().takeLast(maxLines).toList()
+            }.lineSequence().toList().takeLast(maxLines)
         }
     } catch (e: Exception) {
         emptyList()

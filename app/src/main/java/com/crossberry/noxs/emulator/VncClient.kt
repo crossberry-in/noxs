@@ -15,6 +15,7 @@
  */
 package com.crossberry.noxs.emulator
 
+import com.crossberry.noxs.shared.emulator.Keysym
 import com.crossberry.noxs.shared.emulator.Rfb
 import com.crossberry.noxs.shared.NoxsLog
 import java.io.BufferedInputStream
@@ -74,11 +75,11 @@ class VncClient(
     }
 
     fun sendChar(c: Char, down: Boolean) {
-        Rfb.forChar(c)?.let { send(Rfb.keyEvent(it, down)) }
+        Keysym.forChar(c)?.let { send(Rfb.keyEvent(it, down)) }
     }
 
     fun sendKeyByName(name: String, down: Boolean) {
-        Rfb.forName(name)?.let { send(Rfb.keyEvent(it, down)) }
+        Keysym.forName(name)?.let { send(Rfb.keyEvent(it, down)) }
     }
 
     /** buttonMask: bit 0 = left button (the only one the touch path uses). */
