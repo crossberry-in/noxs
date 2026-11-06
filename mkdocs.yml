@@ -105,6 +105,9 @@ nav:
       - Noxs API (@noxs/nx-api): NX-API.md
       - Plugin SDK: PLUGIN-SDK.md
       - nx-installer: NX-INSTALLER.md
+  - NoxOS Emulator:
+      - Integration overview: NOXOS-EMULATOR.md
+      - QEMU on Android (M1): QEMU-ANDROID.md
   - Development:
       - Testing & CI: TESTING.md
       - FAQ: FAQ.md
