@@ -19,7 +19,7 @@ class SetupProgressSanitizerTest {
     @Test fun `package and download activity maps to general friendly status`() {
         assertEquals(
             "Preparing secure connections",
-            SetupProgressSanitizer.message("Refreshing signed Debian package metadata over HTTP")
+            SetupProgressSanitizer.message("Refreshing signed Ubuntu package metadata over HTTP")
         )
         assertEquals(
             "Downloading your Linux environment",

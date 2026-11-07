@@ -4,7 +4,7 @@
  *
  * Serializes every Noxs-managed apt/dpkg operation (first-time setup, the
  * package manager screen, background security bootstrap, user-initiated
- * repair). Debian's real dpkg locks still serialize the actual processes;
+ * repair). dpkg's real locks still serialize the actual processes;
  * this guard adds an app-level single-flight policy so Noxs never starts a
  * second transaction while one is active, and so in-shell users get a clear
  * message instead of an opaque dpkg lock error.

@@ -96,7 +96,7 @@ jobs:
           name: noxs-release-apk
           path: app/build/outputs/apk/release/app-release.apk
 
-      - name: Upload offline Debian rootfs for release
+      - name: Upload offline Ubuntu rootfs for release
         uses: actions/upload-artifact@v4
         with:
           name: noxs-offline-rootfs-arm64
@@ -227,13 +227,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download offline Debian rootfs bundle
+      - name: Download offline Ubuntu rootfs bundle
         uses: actions/download-artifact@v4
         with:
           name: noxs-offline-rootfs-arm64
           path: offline-rootfs
 
-      - name: Stage offline Debian assets
+      - name: Stage offline Ubuntu assets
         run: |
           mkdir -p app/src/main/assets/bootstrap/arm64-v8a
           # rootfs.bin is the gzip rootfs under an aapt-safe name: aapt/AAPT2

@@ -2,7 +2,7 @@
  * Noxs — original implementation.
  * Process-wide APT security bootstrap runner.
  *
- * The signed APT/CA/TLS bootstrap repairs the Debian package layer in the
+ * The signed APT/CA/TLS bootstrap repairs the Ubuntu package layer in the
  * background. It must NEVER gate shell creation: the terminal always clears
  * straight to an active shell while this runs (and retries on later launches).
  * State intentionally lives outside any Activity/Service so it survives
@@ -60,7 +60,7 @@ object NoxsAptSetup {
     fun startIfInstalled(paths: NoxsPaths, launcher: ProotLauncher, scope: CoroutineScope) {
         if (!paths.isInstalled()) return
         if (File(paths.base, "offline-packages-v1.ready").isFile && !paths.aptReadyMarker.isFile) {
-            NoxsLog.i("AptSetup", "automatic APT network bootstrap deferred for bundled offline Debian")
+            NoxsLog.i("AptSetup", "automatic APT network bootstrap deferred for bundled offline Ubuntu")
             return
         }
         when (_state.value) {

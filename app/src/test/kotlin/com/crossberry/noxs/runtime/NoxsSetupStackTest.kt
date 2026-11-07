@@ -118,7 +118,7 @@ class NoxsSetupEventLogTest {
 
     @Test
     fun `notes never contain urls or private paths`() {
-        val dirty = "failed fetching https://deb.debian.org/debian from /data/user/0/noxs/rootfs"
+        val dirty = "failed fetching https://ports.ubuntu.com/ubuntu-ports from /data/user/0/noxs/rootfs"
         val clean = NoxsSetupEventLog.sanitize(dirty)
         assertFalse(clean.contains("https://"))
         assertFalse(clean.contains("/data/"))

@@ -62,7 +62,7 @@ class AptSetupBackoffTest {
     @Test
     fun `failure signature is stable and bounded`() {
         val detail = "signed HTTP apt update failed (exit 100, 00:12):\n" +
-            "E: Failed to fetch http://deb.debian.org/debian/dists/bookworm/InRelease\n" +
+            "E: Failed to fetch http://ports.ubuntu.com/ubuntu-ports/dists/noble/InRelease\n" +
             "W: Some index files failed to download"
         val signature = AptSetupBackoff.signature(detail)
         assertTrue(signature.contains("signed HTTP apt update failed"))
@@ -72,7 +72,7 @@ class AptSetupBackoffTest {
 
     @Test
     fun `a changed error produces a different signature`() {
-        val dns = "Checking repositories failed: DNS lookup failed for deb.debian.org"
+        val dns = "Checking repositories failed: DNS lookup failed for ports.ubuntu.com"
         val tls = "HTTPS apt update failed (exit 100):\nE: certificate verification failed"
         assertTrue(AptSetupBackoff.signature(dns) != AptSetupBackoff.signature(tls))
     }

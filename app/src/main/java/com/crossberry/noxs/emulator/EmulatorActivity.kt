@@ -7,8 +7,8 @@
  * IME + extra keys → VNC keysyms (virtio-keyboard).
  *
  * HONEST STATUS: implemented with limitations. The QEMU command set and
- * the RFB protocol logic are verified on real bookworm QEMU 7.2.22
- * (tools/emulator/verify_vnc_path.py + M1 gates); this Activity compiles
+ * the RFB protocol logic are verified on real QEMU 7.2.22 (the M1 gate;
+ * Ubuntu noble ships QEMU 8.2 for the guest runtime). This Activity compiles
  * and ships via CI, on-device interaction testing is M9. The VM keeps
  * running when this window closes and dies with the app process (M8).
  */
@@ -43,6 +43,7 @@ class EmulatorActivity : AppCompatActivity() {
     private var vncPort: Int = 0
     private var bootRequested: Boolean = false
     private var stickyCtrl: Boolean = false
+    private var latestState: VmState = VmState.Idle
 
     // ------------------------------------------------------- VNC listener
 
@@ -110,6 +111,7 @@ class EmulatorActivity : AppCompatActivity() {
                 val app = application as NoxsApplication
                 launch { app.emulator.state.collect { render(it) } }
                 launch { app.emulator.installLines.collect { renderInstallLines(it) } }
+                launch { app.emulator.setupProgress.collect { renderSetupProgress(it) } }
             }
         }
 
@@ -132,26 +134,23 @@ class EmulatorActivity : AppCompatActivity() {
 
     private fun render(state: VmState) {
         (application as NoxsApplication).emulator.pollForUnexpectedExit()
+        latestState = state
         when (state) {
             is VmState.Idle -> {
                 showOverlay(getString(R.string.emulator_status_idle), null)
-                binding.emulatorProgress.visibility = View.GONE
                 binding.btnVmRetry.visibility = View.VISIBLE
                 connectIfRunning(null)
             }
             is VmState.Preparing -> {
                 showOverlay(getString(R.string.emulator_status_preparing), state.detail)
-                binding.emulatorProgress.visibility = View.VISIBLE
                 binding.btnVmRetry.visibility = View.GONE
             }
             is VmState.InstallingRuntime -> {
                 showOverlay(getString(R.string.emulator_status_installing), null)
-                binding.emulatorProgress.visibility = View.VISIBLE
                 binding.btnVmRetry.visibility = View.GONE
             }
             is VmState.Booting -> {
                 showOverlay(getString(R.string.emulator_status_booting), "VNC 127.0.0.1:${QemuCommand.vncPort(state.vncDisplay)}")
-                binding.emulatorProgress.visibility = View.VISIBLE
                 binding.btnVmRetry.visibility = View.GONE
             }
             is VmState.Running -> {
@@ -162,7 +161,6 @@ class EmulatorActivity : AppCompatActivity() {
             is VmState.Stopped -> {
                 vncClient?.close(); vncClient = null
                 showOverlay(getString(R.string.emulator_status_stopped), state.detail)
-                binding.emulatorProgress.visibility = View.GONE
                 binding.btnVmRetry.visibility = View.VISIBLE
             }
             is VmState.Failed -> {
@@ -171,9 +169,16 @@ class EmulatorActivity : AppCompatActivity() {
                     getString(R.string.emulator_setup_required)
                 } else state.message
                 showOverlay(getString(R.string.emulator_status_failed), message)
-                binding.emulatorProgress.visibility = View.GONE
                 binding.btnVmRetry.visibility = View.VISIBLE
             }
+        }
+        // Progress bar / percent visibility follows the busy-state only;
+        // values arrive via renderSetupProgress.
+        val busy = state is VmState.Preparing || state is VmState.InstallingRuntime ||
+            state is VmState.Booting
+        if (!busy) {
+            binding.emulatorProgress.visibility = View.GONE
+            binding.emulatorPercent.visibility = View.GONE
         }
     }
 
@@ -185,9 +190,33 @@ class EmulatorActivity : AppCompatActivity() {
         binding.emulatorView.visibility = View.VISIBLE
     }
 
+    /** LIVE setup log: last lines of the apt/boot stream, every 200 ms. */
     private fun renderInstallLines(lines: List<String>) {
         if (lines.isEmpty()) return
-        binding.emulatorInstallLines.text = lines.takeLast(6).joinToString("\n")
+        binding.emulatorInstallLines.text = lines.takeLast(8).joinToString("\n")
+    }
+
+    /** LIVE setup percent: label + determinate bar driven by the manager. */
+    private fun renderSetupProgress(progress: SetupProgress) {
+        val busy = latestState is VmState.Preparing || latestState is VmState.InstallingRuntime ||
+            latestState is VmState.Booting
+        if (!busy || progress.percent <= 0) return
+        binding.emulatorProgress.visibility = View.VISIBLE
+        binding.emulatorProgress.progress = progress.percent
+        binding.emulatorPercent.visibility = View.VISIBLE
+        binding.emulatorPercent.text =
+            getString(R.string.emulator_percent_format, progress.percent, stageLabel(progress.subPhase))
+    }
+
+    private fun stageLabel(phase: SetupSubPhase): String = when (phase) {
+        SetupSubPhase.PREPARING -> getString(R.string.emulator_stage_storage)
+        SetupSubPhase.KERNEL -> getString(R.string.emulator_stage_kernel)
+        SetupSubPhase.PACKAGE_LISTS -> getString(R.string.emulator_stage_lists)
+        SetupSubPhase.DOWNLOADING -> getString(R.string.emulator_stage_download)
+        SetupSubPhase.INSTALLING_PACKAGES -> getString(R.string.emulator_stage_dpkg)
+        SetupSubPhase.BOOTING -> getString(R.string.emulator_status_booting)
+        SetupSubPhase.RUNNING -> getString(R.string.emulator_status_running)
+        SetupSubPhase.IDLE -> ""
     }
 
     private fun triggerBootIfNeeded() {

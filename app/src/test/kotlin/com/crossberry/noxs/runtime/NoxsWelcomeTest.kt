@@ -76,8 +76,11 @@ class NoxsWelcomeTest {
         val pb = ProcessBuilder("bash", "-c", script)
         pb.environment().apply {
             // CI runners may export TERM=dumb; pin a color-capable default so
-            // each test controls the palette deterministically.
+            // each test controls the palette deterministically. NO_COLOR is
+            // likewise cleared so the default render is hermetic even on
+            // hosts that export NO_COLOR globally (local dev sandboxes).
             put("TERM", "xterm-256color")
+            remove("NO_COLOR")
             envPairs.forEach { (k, v) -> put(k, v) }
         }
         pb.redirectErrorStream(false)
@@ -98,9 +101,9 @@ class NoxsWelcomeTest {
         return out
     }
 
-    private fun stubOsRelease(pretty: String = "Debian GNU/Linux 12 (bookworm)"): File =
+    private fun stubOsRelease(pretty: String = "Ubuntu 24.04.5 LTS"): File =
         temporary.newFile("os-release").apply {
-            writeText("PRETTY_NAME=\"$pretty\"\nID=debian\nVERSION_ID=\"12\"\n")
+            writeText("PRETTY_NAME=\"$pretty\"\nID=ubuntu\nVERSION_ID=\"24.04\"\nVERSION_CODENAME=noble\n")
         }
 
     private fun visibleLines(out: String): List<String> =
@@ -116,12 +119,12 @@ class NoxsWelcomeTest {
     fun `default render shows branding, real facts and quick start in a unicode box`() {
         val out = runRenderer("COLUMNS" to "56", osRelease = stubOsRelease())
         assertTrue(out.contains("Noxs Linux"))
-        assertTrue(out.contains("Debian GNU/Linux 12 (bookworm)"))
+        assertTrue(out.contains("Ubuntu 24.04.5 LTS"))
         assertTrue(out.contains(realUname("-m")))
         assertTrue(out.contains("kernel ${realUname("-r")}"))
         assertTrue(out.contains("Quick Start"))
         // valid, existing commands only
-        listOf("noxs help", "nx plug", "noxs code status", "nx cert-fix", "sudo apt update")
+        listOf("noxs help", "nx plug", "noxs code status", "nx cert-fix", "apt update")
             .forEach { assertTrue("missing QS command: $it", out.contains(it)) }
         assertTrue(out.contains("crossberry.vercel.app"))
         assertTrue(out.contains("CrossberryWeb"))
@@ -197,7 +200,7 @@ class NoxsWelcomeTest {
         val cmd = "env -i PATH=/usr/bin:/bin HOME=${home.absolutePath} $extraEnv " +
             "bash --rcfile '${rc.absolutePath}' -i -c 'exit 0'"
         // -c 'exit 0' makes the child's lifetime deterministic: util-linux
-        // versions differ on whether stdin EOF reaches the pty child (Debian
+        // versions differ on whether stdin EOF reaches the pty child (glibc
         // closes the master, Ubuntu 24.04 leaves bash waiting for input
         // forever). stdout is still the pty script(1) provides, so the
         // [ -t 1 ] guard in the rcfile sees a real interactive session.

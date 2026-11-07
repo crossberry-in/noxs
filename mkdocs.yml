@@ -85,6 +85,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Guides:
+      - Ubuntu setup: UBUNTU-SETUP.md
       - Terminal UX: TERMINAL-UX.md
       - Activity Center: ACTIVITY-CENTER.md
       - Editor (code-server): CODE-SERVER.md
@@ -96,6 +97,7 @@ nav:
       - Docker: DOCKER.md
   - Architecture & Security:
       - Architecture: ARCHITECTURE.md
+      - Ubuntu architecture (Ubuntu-first): UBUNTU-ARCHITECTURE.md
       - Bootstrap system: BOOTSTRAP.md
       - Security model: SECURITY.md
       - Unix domain sockets: UNIX-SOCKETS.md
@@ -110,4 +112,5 @@ nav:
       - QEMU on Android (M1): QEMU-ANDROID.md
   - Development:
       - Testing & CI: TESTING.md
+      - Ubuntu test report: UBUNTU-TEST-REPORT.md
       - FAQ: FAQ.md

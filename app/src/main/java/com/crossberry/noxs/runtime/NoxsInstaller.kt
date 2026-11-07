@@ -7,9 +7,9 @@
  *  2  storage initialization (app-private dirs)
  *  3  bootstrap manifest load (linux-runtime/bootstrap/<arch>/bootstrap.manifest)
  *  4  proot binary acquisition (download → SHA-256 verify)
- *  5  Debian 12 rootfs acquisition (download → SHA-256 verify)
+ *  5  Ubuntu 24.04 rootfs acquisition (download → SHA-256 verify)
  *  6  safe extraction (TarGuard: traversal/device/setuid defense)
- *  7  Debian userspace configuration (FHS dirs, /run, /var/run, overlay files)
+ *  7  Ubuntu userspace configuration (FHS dirs, /run, /var/run, overlay files)
  *  8  noxs user creation (+ password prompt → chpasswd, never stored)
  *  9  runtime state initialization (/run, /var/run/noxs, logs, quotas)
  * 10  signed APT bootstrap (dpkg repair, CA certificates, verified HTTPS update)
@@ -72,9 +72,9 @@ class NoxsInstaller(
 
     var overrideRootfsUrl: String? = null
 
-    /** Shell prompt label + banner for the configured userspace (spec §61). */
-    var promptHostLabel: String = "android"
-    var distroBanner: String = "Noxs Debian 12 (bookworm)"
+    /** Shell prompt label + banner for the configured userspace (spec §4). */
+    var promptHostLabel: String = "ubuntu"
+    var distroBanner: String = "Noxs Ubuntu ${NoxsConstants.DEFAULT_UBUNTU_VERSION_ID} LTS (${NoxsConstants.DEFAULT_UBUNTU_RELEASE})"
 
     suspend fun install(progress: Progress): InstallResult = withContext(Dispatchers.IO) {
         progress0 = progress
@@ -112,7 +112,7 @@ class NoxsInstaller(
             }
             progress.onLog("proot bundled: ${prootFile.name} (${prootFile.length()} bytes)")
 
-            // 5 — rootfs
+            // 5 — rootfs (genuine Ubuntu 24.04 LTS base image, Ubuntu-first)
             checkCancelled()
             progress.onStep(5, R.string.setup_step_rootfs, "")
             val rootfsArchive = File(paths.cache, "rootfs-$arch.tar.${manifest.rootfs.format.substringAfter('.')}")
@@ -122,7 +122,7 @@ class NoxsInstaller(
             val bundledRootfs = copyBundledRootfs(manifest, rootfsArchive, manifest.rootfs.sha256)
             if (bundledRootfs != null) {
                 sha = bundledRootfs
-                progress.onLog("offline Debian rootfs loaded from APK assets")
+                progress.onLog("offline Ubuntu rootfs loaded from APK assets")
             } else if (!rootfsArchive.isFile) {
                 acquire(manifest.rootfs, rootfsArchive, progress) { staged, expected ->
                     val v = verify(staged, expected, "rootfs", sourceUrl = manifest.rootfs.url)
@@ -170,7 +170,7 @@ class NoxsInstaller(
                     File(paths.rootfs, "usr/bin/pip3").exists()
                 if (missing.isNotEmpty() || !pipPresent) {
                     throw java.io.IOException(
-                        "Offline Debian package verification failed: " +
+                        "Offline Ubuntu package verification failed: " +
                             (missing + if (pipPresent) emptyList() else listOf("pip")).joinToString()
                     )
                 }
@@ -185,7 +185,8 @@ class NoxsInstaller(
                 paths,
                 bootstrapHttpApt = true,
                 hostLabel = promptHostLabel,
-                banner = distroBanner
+                banner = distroBanner,
+                arch = arch
             )
 
             // 8 — noxs user + password
@@ -199,7 +200,7 @@ class NoxsInstaller(
             initRuntimeState()
 
             // 10 — initialize dpkg/APT, repair CA certificates over signed
-            // Debian HTTP metadata, then switch to a verified HTTPS update.
+            // Ubuntu HTTP metadata, then switch to a verified HTTPS update.
             // NON-FATAL BY DESIGN: a shell does not need APT state. If this
             // step fails (slow or restricted network) setup still completes so
             // the terminal clears straight to an active shell; NoxsAptSetup
@@ -228,8 +229,11 @@ class NoxsInstaller(
             }
 
             // marker
+            // marker — distro/release identity feeds the Ubuntu-first
+            // migration logic (legacy Debian installs carry suite=bookworm).
             paths.installMarker.writeText(
-                "installed=${System.currentTimeMillis()}\narch=$arch\nrootfs_sha256=$sha\nsuite=${NoxsConstants.DEFAULT_DEBIAN_SUITE}\n"
+                "installed=${System.currentTimeMillis()}\narch=$arch\nrootfs_sha256=$sha\n" +
+                    "distro=ubuntu\nrelease=${NoxsConstants.DEFAULT_UBUNTU_RELEASE}\nsuite=${NoxsConstants.DEFAULT_UBUNTU_RELEASE}\n"
             )
             progress.onStep(11, R.string.setup_step_shell, "")
             InstallResult.Success(sha)
@@ -268,7 +272,7 @@ class NoxsInstaller(
     private var progress0: Progress? = null
 
     /**
-     * Copies and verifies the prebuilt Debian image shipped in APK assets.
+     * Copies and verifies the prebuilt Ubuntu image shipped in APK assets.
      * Returns null when this ABI/build has no offline bundle, preserving the
      * existing resumable network bootstrap as the fallback.
      *

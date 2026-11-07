@@ -26,12 +26,12 @@
     <string name="setup_step_storage">Initializing secure storage</string>
     <string name="setup_step_manifest">Loading bootstrap manifest</string>
     <string name="setup_step_proot">Acquiring proot runtime</string>
-    <string name="setup_step_rootfs">Acquiring Debian 12 root filesystem</string>
+    <string name="setup_step_rootfs">Acquiring the Ubuntu 24.04 LTS root filesystem</string>
     <string name="setup_step_extract">Extracting root filesystem (path-traversal protected)</string>
-    <string name="setup_step_configure">Configuring Debian userspace</string>
+    <string name="setup_step_configure">Configuring the Ubuntu userspace</string>
     <string name="setup_step_user">Creating noxs user</string>
     <string name="setup_step_run">Initializing /run and /var/run</string>
-    <string name="setup_step_apt">Repairing dpkg and verifying Debian HTTPS certificates</string>
+    <string name="setup_step_apt">Repairing dpkg and verifying Ubuntu HTTPS certificates</string>
     <string name="setup_step_shell">Preparing first shell</string>
     <string name="setup_done">Noxs is ready</string>
     <string name="setup_done_msg">Your Linux environment is ready.</string>
@@ -114,7 +114,7 @@
     <string name="err_capability">Required capability is unavailable on this Android device.</string>
     <string name="err_not_installed">The Linux environment is not set up yet.</string>
     <string name="confirm_reset_title">Reset Linux environment?</string>
-    <string name="confirm_reset_msg">This deletes the Noxs Debian root filesystem, including /home/noxs. You will need to run setup again. It does not modify Android folders selected through SAF.</string>
+    <string name="confirm_reset_msg">This deletes the Noxs Ubuntu root filesystem, including /home/noxs. You will need to run setup again. It does not modify Android folders selected through SAF.</string>
 
     <!-- Package manager -->
     <string name="title_package_manager">Packages</string>
@@ -580,7 +580,7 @@
     <string name="title_emulator">NoxOS Emulator</string>
     <string name="emulator_status_idle">NoxOS is ready to boot</string>
     <string name="emulator_status_preparing">Preparing the VM…</string>
-    <string name="emulator_status_installing">Installing the QEMU runtime (one-time, Debian apt)…</string>
+    <string name="emulator_status_installing">Installing the QEMU runtime (one-time, Ubuntu apt)…</string>
     <string name="emulator_status_booting">Booting NoxOS…</string>
     <string name="emulator_status_running">NoxOS is running — tap the display to interact</string>
     <string name="emulator_status_stopped">VM stopped</string>
@@ -594,6 +594,13 @@
     <string name="emulator_display">NoxOS display</string>
     <string name="emulator_setup_required">The Noxs Linux environment is not set up yet. Open the terminal setup first, then boot NoxOS.</string>
     <string name="emulator_stops_on_exit">Note: the VM keeps running while Noxs is alive; it stops if Android kills the app (background handling arrives in M8).</string>
+    <!-- Live setup progress (percent + stage, M2) -->
+    <string name="emulator_percent_format">%1$d%% · %2$s</string>
+    <string name="emulator_stage_storage">Preparing VM storage…</string>
+    <string name="emulator_stage_kernel">Provisioning kernel…</string>
+    <string name="emulator_stage_lists">Refreshing package lists…</string>
+    <string name="emulator_stage_download">Downloading packages…</string>
+    <string name="emulator_stage_dpkg">Installing packages…</string>
 
     <string name="action_back">‹</string>
     <string name="editor_open_terminal">Open in Terminal</string>

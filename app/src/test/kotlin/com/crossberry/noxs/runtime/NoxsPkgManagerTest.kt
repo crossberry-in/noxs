@@ -104,7 +104,7 @@ class NoxsPkgManagerTest {
         assertTrue("require-mirror mode raises MIRROR_UNAVAILABLE", pkgManager.contains("MIRROR_UNAVAILABLE"))
         assertFalse(
             "the mirror must never replace the official apt sources wholesale",
-            pkgManager.contains("deb.debian.org/debian bookworm"),
+            pkgManager.contains("ports.ubuntu.com/ubuntu-ports noble"),
         )
     }
 
@@ -132,7 +132,7 @@ class NoxsPkgManagerTest {
         assertTrue(pkgManager.contains("pkgm_search_cmd"))
         assertTrue("local cache source tag", pkgManager.contains("local-cache"))
         assertTrue("Noxs API source tag", pkgManager.contains("noxs-mirror"))
-        assertTrue("distro metadata source tag", pkgManager.contains("debian-official"))
+        assertTrue("distro metadata source tag", pkgManager.contains("ubuntu-official"))
         assertTrue("registry source tag", pkgManager.contains("noxs-registry"))
         assertTrue(pkgManager.contains("PACKAGE_NOT_FOUND"))
         assertTrue("mirror index is cached with a TTL", pkgManager.contains("NOXS_PKG_CACHE_TTL"))

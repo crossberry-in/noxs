@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build Debian 12 Bookworm ARM64 with the Noxs offline package set.
+# Build Ubuntu 24.04 LTS (Noble Numbat) ARM64 with the Noxs offline package set.
 # The archive is generated in CI and embedded in the APK; it is not committed.
 #
 # The APK bundles the archive as rootfs.bin (NOT rootfs.tar.gz): aapt/AAPT2
@@ -27,10 +27,10 @@ MANIFEST_DIR="$ROOT/linux-runtime/bootstrap/$ARCH"
 mkdir -p "$ASSET_DIR" "$MANIFEST_DIR"
 ASSET_DIR="$(cd "$ASSET_DIR" && pwd)"
 
-echo "[noxs] building Debian 12 Bookworm ARM64 offline rootfs"
+echo "[noxs] building Ubuntu 24.04 LTS ARM64 offline rootfs"
 docker run --rm --platform linux/arm64 \
     -v "$ASSET_DIR:/noxs-out" \
-    debian:12-slim bash -euc '
+    ubuntu:24.04 bash -euc '
         export DEBIAN_FRONTEND=noninteractive
         apt-get update
         apt-get install -y --no-install-recommends \
@@ -75,7 +75,7 @@ test -s "$ARCHIVE"
 gzip -t "$ARCHIVE"
 ROOTFS_SHA="$(sha256sum "$ARCHIVE" | awk '{print $1}')"
 ROOTFS_SIZE="$(stat -c%s "$ARCHIVE")"
-ROOTFS_URL="https://github.com/crossberry-in/noxs/releases/latest/download/noxs-debian-bookworm-arm64.tar.gz"
+ROOTFS_URL="https://github.com/crossberry-in/noxs/releases/latest/download/noxs-ubuntu-24.04-arm64.tar.gz"
 
 cat > "$ASSET_DIR/bootstrap.manifest" <<EOF
 {

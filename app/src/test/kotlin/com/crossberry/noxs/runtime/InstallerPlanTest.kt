@@ -16,14 +16,21 @@ import java.net.UnknownHostException
 class InstallerPlanTest {
 
     @Test
+    fun `ubuntu cdimage url stays unique with no mirror`() {
+        val primary = "https://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release/" +
+            "ubuntu-base-24.04.5-base-arm64.tar.gz"
+        val candidates = InstallerPlan.candidateUrls(primary)
+        assertEquals(listOf(primary), candidates)
+    }
+
+    @Test
     fun `raw github urls gain a github com raw mirror`() {
-        val primary = "https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts/" +
-            "ca011a8b1c3b259e4cbbf83bf6841f1fd5f497c1/bookworm/oci/blobs/rootfs.tar.gz"
+        val primary = "https://raw.githubusercontent.com/crossberry-in/noxs/" +
+            "main/noxs-ubuntu-24.04-arm64.tar.gz"
         val candidates = InstallerPlan.candidateUrls(primary)
         assertEquals(primary, candidates[0])
         assertEquals(
-            "https://github.com/debuerreotype/docker-debian-artifacts/raw/" +
-                "ca011a8b1c3b259e4cbbf83bf6841f1fd5f497c1/bookworm/oci/blobs/rootfs.tar.gz",
+            "https://github.com/crossberry-in/noxs/raw/main/noxs-ubuntu-24.04-arm64.tar.gz",
             candidates[1]
         )
     }
@@ -36,13 +43,13 @@ class InstallerPlanTest {
 
     @Test
     fun `download reserve keeps slack above artifact size`() {
-        assertEquals(48_389_910L + 128L * 1024 * 1024, InstallerPlan.downloadReserveBytes(48_389_910L))
+        assertEquals(29_936_675L + 128L * 1024 * 1024, InstallerPlan.downloadReserveBytes(29_936_675L))
         assertEquals(256L * 1024 * 1024, InstallerPlan.downloadReserveBytes(0L))
     }
 
     @Test
     fun `extraction reserve is 4x archive`() {
-        assertEquals(48_389_910L * 4, InstallerPlan.extractionReserveBytes(48_389_910L))
+        assertEquals(29_936_675L * 4, InstallerPlan.extractionReserveBytes(29_936_675L))
     }
 
     @Test

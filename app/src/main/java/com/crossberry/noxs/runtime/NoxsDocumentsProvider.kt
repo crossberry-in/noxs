@@ -117,7 +117,7 @@ class NoxsDocumentsProvider : DocumentsProvider() {
         cursor.newRow().apply {
             add(DocumentsContract.Root.COLUMN_ROOT_ID, ROOT_ID)
             add(DocumentsContract.Root.COLUMN_TITLE, NoxsDocumentsPolicy.ROOT_TITLE)
-            add(DocumentsContract.Root.COLUMN_SUMMARY, "Debian 12 guest files")
+            add(DocumentsContract.Root.COLUMN_SUMMARY, "Ubuntu 24.04 guest files")
             add(DocumentsContract.Root.COLUMN_DOCUMENT_ID, NoxsDocumentsPolicy.HOME_DOC)
             add(DocumentsContract.Root.COLUMN_MIME_TYPES, "*/*")
             add(DocumentsContract.Root.COLUMN_FLAGS, DocumentsContract.Root.FLAG_LOCAL_ONLY or DocumentsContract.Root.FLAG_SUPPORTS_IS_CHILD)

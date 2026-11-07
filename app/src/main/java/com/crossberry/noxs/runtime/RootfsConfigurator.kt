@@ -1,12 +1,16 @@
 /*
  * Noxs — original implementation.
- * Configures the extracted Debian rootfs into the Noxs userspace:
+ * Configures the extracted Ubuntu rootfs into the Noxs userspace:
  *  - writes overlay files (profile.d, environment, motd, apt sources, DNS)
  *  - installs the `noxs` CLI (code-server, services, sockets, processes)
  *  - installs Android proot-compatible `su` and `sudo` wrappers
  *  - repairs any 0-byte symlink placeholders from older installs
  *  - ensures /run, /var/run, /var/run/noxs, /var/log/noxs exist (FHS)
  * Content mirrors linux-runtime/rootfs/overlay (CI diff-checks both).
+ *
+ * Ubuntu-first: the rootfs is the genuine Ubuntu 24.04 LTS (noble) base
+ * image; APT sources are the official Ubuntu repositories (ports.ubuntu.com
+ * for arm64/armhf, archive.ubuntu.com for amd64). No Debian sources exist.
  */
 package com.crossberry.noxs.runtime
 
@@ -27,7 +31,7 @@ object RootfsConfigurator {
 
     fun configure(context: Context, paths: NoxsPaths) = configure(paths)
 
-    /** Configure the Debian sources as HTTP only while bootstrapping signed CA packages. */
+    /** Configure the Ubuntu sources as HTTP only while bootstrapping signed CA packages. */
     fun configure(context: Context, paths: NoxsPaths, bootstrapHttpApt: Boolean) =
         configure(paths, bootstrapHttpApt)
 
@@ -37,16 +41,17 @@ object RootfsConfigurator {
         configure(paths, bootstrapHttpApt, hostLabel = "android")
 
     /**
-     * [hostLabel] / [banner] / [hint] parameterize the shell prompt (noxs@debian,
-     * noxs@ubuntu … spec §61), the welcome banner and the first-steps hint while
-     * keeping the legacy Debian flow byte-identical via the defaults.
+     * [hostLabel] / [banner] / [hint] parameterize the shell prompt
+     * (noxs@ubuntu — spec §4 default terminal identity), the welcome banner
+     * and the first-steps hint. The defaults are the Ubuntu-first identity.
      */
     fun configure(
         paths: NoxsPaths,
         bootstrapHttpApt: Boolean,
         hostLabel: String,
-        banner: String = "Noxs Debian 12 (bookworm)",
-        hint: String = "sudo apt update"
+        banner: String = "Noxs Ubuntu ${NoxsConstants.DEFAULT_UBUNTU_VERSION_ID} LTS (${NoxsConstants.DEFAULT_UBUNTU_RELEASE})",
+        hint: String = "apt update",
+        arch: String = "arm64-v8a"
     ) {
         val rootfs = paths.rootfs
 
@@ -100,8 +105,8 @@ object RootfsConfigurator {
         writeFile(File(rootfs, "etc/hosts"), HOSTS)
         writeFile(File(rootfs, "etc/hostname"), "noxs\n")
 
-        // --- APT configuration (one Debian source file, isolated to this rootfs) ---
-        configureAptSources(paths, useHttps = !bootstrapHttpApt)
+        // --- APT configuration (one Ubuntu source file, isolated to this rootfs) ---
+        configureAptSources(paths, useHttps = !bootstrapHttpApt, arch = arch)
         writeFile(File(rootfs, "etc/apt/apt.conf.d/70noxs"), APT_CONF)
         repairDpkgPermissions(paths)
 
@@ -129,15 +134,17 @@ object RootfsConfigurator {
         // --- Ensure `noxs` user and interactive bashrc prompt/banner ---
         ensureNoxsUserAndBashrc(rootfs, hostLabel, banner, hint)
 
-        NoxsLog.i("RootfsConfig", "Debian userspace configured")
+        NoxsLog.i("RootfsConfig", "Ubuntu userspace configured")
     }
 
     /**
-     * Keep exactly one active APT definition. The stock Debian rootfs ships
-     * debian.sources; remove it and any other active .list/.sources files so
-     * APT sees only the Noxs Bookworm, updates, and security repositories.
+     * Keep exactly one active APT definition. The stock Ubuntu base image
+     * ships ubuntu.sources; remove it and any other active .list/.sources
+     * files so APT sees only the Noxs Noble, updates, backports, and security
+     * repositories (ports.ubuntu.com on arm64/armhf, archive.ubuntu.com on
+     * amd64).
      */
-    fun configureAptSources(paths: NoxsPaths, useHttps: Boolean) {
+    fun configureAptSources(paths: NoxsPaths, useHttps: Boolean, arch: String = "arm64-v8a") {
         val aptDir = File(paths.rootfs, "etc/apt")
         val sourceDir = File(aptDir, "sources.list.d")
         if (!sourceDir.isDirectory && !sourceDir.mkdirs()) {
@@ -155,7 +162,7 @@ object RootfsConfigurator {
                 throw IllegalStateException("Cannot remove duplicate APT source ${oldSource.absolutePath}")
             }
         }
-        writeFile(File(sourceDir, "noxs.sources"), aptSources(useHttps))
+        writeFile(File(sourceDir, "noxs.sources"), aptSources(useHttps, arch))
     }
 
     /**
@@ -305,7 +312,7 @@ object RootfsConfigurator {
             File(rootfs, "etc/profile.d/noxs-pkg-guard.sh").setExecutable(false)
             installWelcomeLib(rootfs)
             val marker = "# --- Noxs interactive shell setup ---"
-            val snippet = bashrcSnippet("android", "Noxs Debian 12 (bookworm)", "sudo apt update")
+            val snippet = bashrcSnippet("android", "Noxs Ubuntu ${NoxsConstants.DEFAULT_UBUNTU_VERSION_ID} LTS (${NoxsConstants.DEFAULT_UBUNTU_RELEASE})", "apt update")
             listOf(
                 File(rootfs, "etc/bash.bashrc"),
                 File(rootfs, "home/noxs/.bashrc"),
@@ -332,7 +339,7 @@ object RootfsConfigurator {
     // 7: adds plug-lib.sh (nx plug Noxs Plugin Store) to existing environments
     // 8: adds cert-fix.sh (nx cert-fix — APT/CA repair + curl/wget provisioning)
     // 9: removes env-lib.sh + the `nx env` dispatcher (multi-OS environments
-    //    retired; Debian 12 is the one environment). The migration deletes
+    //    retired; Ubuntu 24.04 LTS is the one environment). The migration deletes
     //    the stale guest lib so no orphan script lingers on existing installs.
     // 10: rewrites cert-fix.sh — apt-get update is now verified beyond the
     //    exit code (strict error mode + output scan + populated-lists check)
@@ -600,8 +607,8 @@ object RootfsConfigurator {
     private fun ensureNoxsUserAndBashrc(
         rootfs: File,
         hostLabel: String = "android",
-        banner: String = "Noxs Debian 12 (bookworm)",
-        hint: String = "sudo apt update"
+        banner: String = "Noxs Ubuntu ${NoxsConstants.DEFAULT_UBUNTU_VERSION_ID} LTS (${NoxsConstants.DEFAULT_UBUNTU_RELEASE})",
+        hint: String = "apt update"
     ) {
         val etc = File(rootfs, "etc")
         val passwdFile = File(etc, "passwd")
@@ -671,7 +678,7 @@ object RootfsConfigurator {
         f.writeText(content)
     }
 
-    private fun motd(banner: String = "Noxs Debian 12 (bookworm)"): String = """
+    private fun motd(banner: String = "Noxs Ubuntu ${NoxsConstants.DEFAULT_UBUNTU_VERSION_ID} LTS (${NoxsConstants.DEFAULT_UBUNTU_RELEASE})"): String = """
         Welcome to Noxs ($banner userspace)
 
         * All operations run inside the Android app sandbox — you have full
@@ -684,21 +691,45 @@ object RootfsConfigurator {
         * `noxs help` lists all Noxs commands.
     """.trimIndent() + "\n"
 
-    private fun aptSources(useHttps: Boolean): String {
+    /**
+     * Official Ubuntu repositories ONLY (Ubuntu-first spec — no Debian).
+     * arm64/armhf guests live on ports.ubuntu.com (including the security
+     * pocket); amd64 (x86_64 app builds) uses archive.ubuntu.com +
+     * security.ubuntu.com. Signed-By points at the ubuntu-archive-keyring.gpg
+     * that ships inside the genuine ubuntu-base image (verified: the
+     * `ubuntu-keyring` package is installed there).
+     */
+    private fun aptSources(useHttps: Boolean, arch: String = "arm64-v8a"): String {
         val scheme = if (useHttps) "https" else "http"
-        return """
+        return if (arch == "x86_64") {
+            """
             Types: deb
-            URIs: $scheme://deb.debian.org/debian
-            Suites: bookworm bookworm-updates
-            Components: main contrib non-free non-free-firmware
-            Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+            URIs: $scheme://${NoxsConstants.UBUNTU_ARCHIVE_HOST}/ubuntu
+            Suites: ${NoxsConstants.DEFAULT_UBUNTU_RELEASE} ${NoxsConstants.DEFAULT_UBUNTU_RELEASE}-updates ${NoxsConstants.DEFAULT_UBUNTU_RELEASE}-backports
+            Components: main restricted universe multiverse
+            Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
 
             Types: deb
-            URIs: $scheme://security.debian.org/debian-security
-            Suites: bookworm-security
-            Components: main contrib non-free non-free-firmware
-            Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-        """.trimIndent() + "\n"
+            URIs: $scheme://${NoxsConstants.UBUNTU_SECURITY_HOST}/ubuntu
+            Suites: ${NoxsConstants.DEFAULT_UBUNTU_RELEASE}-security
+            Components: main restricted universe multiverse
+            Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+            """.trimIndent() + "\n"
+        } else {
+            """
+            Types: deb
+            URIs: $scheme://${NoxsConstants.UBUNTU_PORTS_HOST}/ubuntu-ports
+            Suites: ${NoxsConstants.DEFAULT_UBUNTU_RELEASE} ${NoxsConstants.DEFAULT_UBUNTU_RELEASE}-updates ${NoxsConstants.DEFAULT_UBUNTU_RELEASE}-backports
+            Components: main restricted universe multiverse
+            Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+            Types: deb
+            URIs: $scheme://${NoxsConstants.UBUNTU_PORTS_HOST}/ubuntu-ports
+            Suites: ${NoxsConstants.DEFAULT_UBUNTU_RELEASE}-security
+            Components: main restricted universe multiverse
+            Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+            """.trimIndent() + "\n"
+        }
     }
 
     // ------------------------------------------------------------ templates
@@ -790,7 +821,7 @@ object RootfsConfigurator {
     private val NOXS_SU_WRAPPER = """
         #!/bin/sh
         # Noxs proot-compatible su implementation.
-        # Debian's PAM su calls libaudit NETLINK_AUDIT which Android SELinux blocks with EACCES.
+        # Ubuntu's PAM su calls libaudit NETLINK_AUDIT which Android SELinux blocks with EACCES.
         SHELL_BIN="/bin/bash"
         LOGIN_SHELL=0
         CMD=""
@@ -938,7 +969,7 @@ object RootfsConfigurator {
 
     private val HELLO = """
         #!/bin/sh
-        echo "Noxs ${BuildConfig.VERSION_NAME} — Debian 12 userspace inside the Android app sandbox."
+        echo "Noxs ${BuildConfig.VERSION_NAME} — Ubuntu 24.04 LTS userspace inside the Android app sandbox."
         echo "Security notice: 'sudo' here manages the Noxs environment ONLY."
         echo "It does not provide Android device root access."
     """.trimIndent()
@@ -966,8 +997,8 @@ object RootfsConfigurator {
     internal fun ensureNoxsUser(
         rootfs: File,
         hostLabel: String = "android",
-        banner: String = "Noxs Debian 12 (bookworm)",
-        hint: String = "sudo apt update"
+        banner: String = "Noxs Ubuntu ${NoxsConstants.DEFAULT_UBUNTU_VERSION_ID} LTS (${NoxsConstants.DEFAULT_UBUNTU_RELEASE})",
+        hint: String = "apt update"
     ) {
         ensureNoxsUserAndBashrc(rootfs, hostLabel, banner, hint)
     }

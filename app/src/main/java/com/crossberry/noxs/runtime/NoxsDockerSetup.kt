@@ -203,7 +203,7 @@ class NoxsDockerSetup(
                 events.onCheck(
                     addRow(
                         "Docker package", false,
-                        "The Debian package database is not ready yet. Run it later with: noxs docker install"
+                        "The dpkg package database is not ready yet. Run it later with: noxs docker install"
                     )
                 )
                 return finish(

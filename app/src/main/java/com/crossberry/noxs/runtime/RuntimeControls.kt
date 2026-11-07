@@ -78,7 +78,7 @@ class UserManagerControl(
 
     suspend fun createUser(name: String): Boolean {
         if (!PasswdDb.isValidUsername(name)) return false
-        // useradd is Debian's tool; it handles home, skel, group creation.
+        // useradd ships with Ubuntu too; it handles home, skel, group creation.
         val r = exec.runShell(
             "useradd -m -G sudo -s ${ShellUtil.quote(NoxsConstants.DEFAULT_SHELL)} ${ShellUtil.quote(name)}"
         )

@@ -20,7 +20,7 @@ data class VmConfig(
     val displayHeight: Int = 1280,
     val vncBind: String = "127.0.0.1",
     val kernelAssetVersion: String,
-    val qemuRuntime: String = "bookworm (Debian 12)",
+    val qemuRuntime: String = "noble (Ubuntu 24.04)",
     val createdAtMs: Long,
     val lastBootAtMs: Long? = null
 )
@@ -74,7 +74,7 @@ object VmConfigJson {
             displayHeight = display.strictInt("height", 1280),
             vncBind = obj.strictString("vncBind", "127.0.0.1"),
             kernelAssetVersion = obj.strictString("kernelAssetVersion", ""),
-            qemuRuntime = obj.strictString("qemuRuntime", "bookworm (Debian 12)"),
+            qemuRuntime = obj.strictString("qemuRuntime", "noble (Ubuntu 24.04)"),
             createdAtMs = obj.strictLong("createdAtMs", 0L),
             lastBootAtMs = obj.strictLong("lastBootAtMs", 0L).takeIf { it > 0 }
         )

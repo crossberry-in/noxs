@@ -14,17 +14,19 @@ class RootfsAptSourcesTest {
     @get:Rule
     val temporary = TemporaryFolder()
 
-    @Test fun `single HTTPS Bookworm source replaces base image definitions`() {
+    @Test fun `single HTTPS Noble arm64 source replaces base image definitions`() {
         val paths = NoxsPaths(temporary.newFolder("rootfs-base"))
         val apt = File(paths.rootfs, "etc/apt")
         val sourceDir = File(apt, "sources.list.d")
         sourceDir.mkdirs()
-        File(apt, "sources.list").writeText("deb http://old.example bookworm main\n")
-        File(sourceDir, "debian.sources").writeText("old base image sources\n")
-        File(sourceDir, "extra.list").writeText("deb http://extra.example bookworm main\n")
+        File(apt, "sources.list").writeText("deb http://old.example noble main\n")
+        // The genuine ubuntu-base image ships this file — the configurator
+        // must remove it along with any other active source definitions.
+        File(sourceDir, "ubuntu.sources").writeText("stock base image sources\n")
+        File(sourceDir, "extra.list").writeText("deb http://extra.example noble main\n")
         File(sourceDir, "preferences").writeText("keep non-source apt configuration\n")
 
-        RootfsConfigurator.configureAptSources(paths, useHttps = true)
+        RootfsConfigurator.configureAptSources(paths, useHttps = true, arch = "arm64-v8a")
 
         assertFalse(File(apt, "sources.list").exists())
         val definitions = sourceDir.listFiles().orEmpty().filter {
@@ -32,14 +34,26 @@ class RootfsAptSourcesTest {
         }
         assertEquals(listOf("noxs.sources"), definitions.map { it.name })
         val source = File(sourceDir, "noxs.sources").readText()
-        assertTrue(source.contains("URIs: https://deb.debian.org/debian"))
-        assertTrue(source.contains("Suites: bookworm bookworm-updates"))
-        assertTrue(source.contains("URIs: https://security.debian.org/debian-security"))
-        assertTrue(source.contains("Suites: bookworm-security"))
-        assertTrue(source.contains("Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg"))
-        assertTrue(source.contains("Components: main contrib non-free non-free-firmware"))
+        // Official Ubuntu repositories ONLY — no Debian host may appear.
+        assertTrue(source.contains("URIs: https://ports.ubuntu.com/ubuntu-ports"))
+        assertTrue(source.contains("Suites: noble noble-updates noble-backports"))
+        assertTrue(source.contains("Suites: noble-security"))
+        assertTrue(source.contains("Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg"))
+        assertTrue(source.contains("Components: main restricted universe multiverse"))
         assertFalse(source.contains("http://"))
+        assertFalse(source.contains("debian.org"))
+        assertFalse(source.contains("bookworm"))
         assertTrue(File(sourceDir, "preferences").isFile)
+    }
+
+    @Test fun `amd64 builds use the main archive instead of the ports mirror`() {
+        val paths = NoxsPaths(temporary.newFolder("rootfs-amd64"))
+        RootfsConfigurator.configureAptSources(paths, useHttps = true, arch = "x86_64")
+        val source = File(paths.rootfs, "etc/apt/sources.list.d/noxs.sources").readText()
+        assertTrue(source.contains("URIs: https://archive.ubuntu.com/ubuntu"))
+        assertTrue(source.contains("URIs: https://security.ubuntu.com/ubuntu"))
+        assertTrue(source.contains("Suites: noble-security"))
+        assertFalse(source.contains("ports.ubuntu.com"))
     }
 
     @Test fun `dpkg status backups get owner write access without touching outside files`() {
@@ -78,11 +92,11 @@ class RootfsAptSourcesTest {
 
     @Test fun `temporary CA bootstrap uses the same signed repositories over HTTP`() {
         val paths = NoxsPaths(temporary.newFolder("bootstrap-base"))
-        RootfsConfigurator.configureAptSources(paths, useHttps = false)
+        RootfsConfigurator.configureAptSources(paths, useHttps = false, arch = "arm64-v8a")
         val source = File(paths.rootfs, "etc/apt/sources.list.d/noxs.sources").readText()
-        assertTrue(source.contains("URIs: http://deb.debian.org/debian"))
-        assertTrue(source.contains("URIs: http://security.debian.org/debian-security"))
-        assertTrue(source.contains("Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg"))
+        assertTrue(source.contains("URIs: http://ports.ubuntu.com/ubuntu-ports"))
+        assertTrue(source.contains("Suites: noble-security"))
+        assertTrue(source.contains("Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg"))
     }
 
     /**

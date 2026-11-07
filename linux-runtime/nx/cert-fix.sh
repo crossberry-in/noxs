@@ -15,10 +15,10 @@
 # Repair steps:
 #  1. refresh the already-installed CA bundle (best effort)
 #  2. apt-get update — verified beyond the exit code; when HTTPS fails,
-#     switch to signed HTTP — Debian metadata stays GPG-authenticated
+#     switch to signed HTTP — Ubuntu metadata stays GPG-authenticated
 #     over plain HTTP, so this is safe
 #  3. dpkg recovery for interrupted package configuration
-#  4. install ca-certificates + debian-archive-keyring + curl + wget
+#  4. install ca-certificates + ubuntu-keyring + curl + wget
 #     (on failure: disk-space and dpkg-audit diagnostics in the TXT log)
 #  5. regenerate the CA bundle (update-ca-certificates --fresh)
 #  6. switch back to HTTPS, re-verify; keep signed HTTP only when TLS
@@ -198,26 +198,40 @@ cf_transport() {
     [ -f "$CF_SOURCES" ] && sed -n 's/^URIs:[[:space:]]*//p' "$CF_SOURCES" | head -n 1
 }
 
-# Canonical Noxs APT definition — byte-identical to the app-side
-# RootfsConfigurator.aptSources(useHttps = true). Used to self-heal a
-# missing or truncated noxs.sources instead of refusing to repair.
+# Canonical Noxs APT definition — semantically identical to the app-side
+# RootfsConfigurator.aptSources(useHttps = true): official Ubuntu repos with
+# a runtime arch check (amd64 → archive.ubuntu.com + security.ubuntu.com;
+# arm64/armhf → ports.ubuntu.com, which also serves the security pocket).
+# Used to self-heal a missing or truncated noxs.sources instead of refusing
+# to repair.
 cf_write_sources() {
-    cf_root sh -c "cat > '$1'" <<'CFEOF'
+    cf_arch="$(dpkg --print-architecture 2>/dev/null || uname -m 2>/dev/null || echo arm64)"
+    case "$cf_arch" in
+        amd64|x86_64)
+            cf_repo_main="https://archive.ubuntu.com/ubuntu"
+            cf_repo_sec="https://security.ubuntu.com/ubuntu"
+            ;;
+        *)
+            cf_repo_main="https://ports.ubuntu.com/ubuntu-ports"
+            cf_repo_sec="https://ports.ubuntu.com/ubuntu-ports"
+            ;;
+    esac
+    cf_root sh -c "cat > '$1'" <<CFEOF
 Types: deb
-URIs: https://deb.debian.org/debian
-Suites: bookworm bookworm-updates
-Components: main contrib non-free non-free-firmware
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+URIs: ${cf_repo_main}
+Suites: noble noble-updates noble-backports
+Components: main restricted universe multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
 
 Types: deb
-URIs: https://security.debian.org/debian-security
-Suites: bookworm-security
-Components: main contrib non-free non-free-firmware
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+URIs: ${cf_repo_sec}
+Suites: noble-security
+Components: main restricted universe multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
 CFEOF
 }
 
-# Debian metadata is GPG-authenticated regardless of transport, so the
+# Ubuntu metadata is GPG-authenticated regardless of transport, so the
 # temporary HTTP fallback is safe; TLS is restored at the end.
 cf_use_http() { cf_root sed -i 's|https://|http://|g' "$CF_SOURCES"; }
 cf_use_https() { cf_root sed -i 's|http://|https://|g' "$CF_SOURCES"; }
@@ -245,7 +259,7 @@ Repairs the APT package layer of this Noxs environment:
   2. apt-get update — verified beyond the exit code, with a signed
      HTTP fallback when TLS or the index downloads fail
   3. repairs interrupted dpkg configuration
-  4. installs ca-certificates, debian-archive-keyring, curl and wget
+  4. installs ca-certificates, ubuntu-keyring, curl and wget
   5. regenerates the CA bundle and re-verifies HTTPS
   6. verifies curl/wget, the CA bundle and the package metadata
 
@@ -349,7 +363,7 @@ cert_fix_cmd() {
     cf_pkg_ok=1
     if ! cf_try "install ca-certificates, keyring, curl, wget" 2 \
         env DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get install -y \
-            --no-install-recommends ca-certificates debian-archive-keyring curl wget; then
+            --no-install-recommends ca-certificates ubuntu-keyring curl wget; then
         cf_pkg_ok=0
     fi
     if [ "$cf_pkg_ok" != 1 ]; then

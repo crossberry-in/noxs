@@ -2,11 +2,11 @@
   "schema": 1,
   "arch": "x86_64",
   "rootfs": {
-    "url": "https://raw.githubusercontent.com/debuerreotype/docker-debian-artifacts/8f962b15d7884a90e17876a9303cbac909d119aa/bookworm/oci/blobs/rootfs.tar.gz",
-    "sha256": "eaac70c68abdf6ffacf6de10d31ed9de4813505d1a794eb7393cb27fceb624a6",
+    "url": "https://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release/ubuntu-base-24.04.5-base-amd64.tar.gz",
+    "sha256": "e77b6f10c2590cef872b33ee9f635a0e3fd1f57fb074c0e52b5c7f56147a0c86",
     "format": "tar.gz",
-    "sizeBytes": 48503440
+    "sizeBytes": 30028293
   },
-  "generatedAt": "2026-10-03",
+  "generatedAt": "2026-11-07T01:55:00Z",
   "source": "scripts/build-rootfs.sh"
 }

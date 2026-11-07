@@ -1,11 +1,11 @@
 # Noxs
 
-**A Debian-optimized Linux environment for Android — a small Linux computer in your pocket.**
+**An Ubuntu 24.04 LTS Linux environment for Android — a small Linux computer in your pocket.**
 
 **Documentation: [crossberry-in.github.io/noxs](https://crossberry-in.github.io/noxs/)**
 — built with Material for MkDocs, deployed on every change to `main`.
 
-Noxs runs a real **Debian 12 (Bookworm)** userspace — bash, APT, sudo, Unix
+Noxs runs a genuine **Ubuntu 24.04 LTS (Noble Numbat)** userspace — bash, APT, sudo, Unix
 domain sockets under `/run` and `/var/run`, user accounts, services and the
 full Linux filesystem hierarchy — inside the Android application sandbox,
 using **proot** (no root required, no security bypass, ARM64-first).
@@ -23,12 +23,12 @@ $ noxs code start               # code-server (VS Code in browser), 127.0.0.1:80
 
 ## Highlights
 
-- 🐧 **Real Debian 12 userspace** — official rootfs, APT package management,
+- 🐧 **Genuine Ubuntu 24.04 LTS userspace** — official ubuntu-base rootfs, APT package management,
   glibc binaries; nothing recompiled against bionic.
 - 📁 **True FHS filesystem** — `/bin /etc /home/noxs /run /var/run /var/log …`
-- 🔐 **Honest sudo** — Debian's real sudo, password-protected, scoped to the
+- 🔐 **Honest sudo** — Ubuntu's real sudo, password-protected, scoped to the
   Noxs sandbox. Never Android root. Never a security bypass.
-- 🔌 **Unix domain sockets** — `unix:///var/run/noxs/…` + Android↔Debian IPC.
+- 🔌 **Unix domain sockets** — `unix:///var/run/noxs/…` + Android↔Ubuntu IPC.
 - 🖥️ **Real terminal** — PTY (native `forkpty`), VT/xterm engine (clean-room,
   original), colors/Unicode/scrollback/resize, multiple sessions.
 - 🧩 **code-server integration** — `noxs code install|start|stop|restart|status`,
@@ -103,7 +103,7 @@ CI builds everything automatically (see `.github/workflows/android-ci.yml`).
 
 1. Open Noxs → **Set up Linux environment**
 2. Set the `noxs` user password (used by `sudo` inside the sandbox)
-3. Bootstrap downloads + verifies Debian 12 + proot (ARM64 prioritized)
+3. Bootstrap downloads + verifies Ubuntu 24.04 LTS + proot (ARM64 prioritized)
 4. Terminal opens: `noxs@android:~$`
 
 Everything after bootstrap works offline.
@@ -183,7 +183,7 @@ environment only. Details: [docs/SECURITY.md](docs/SECURITY.md) ·
 ## License
 
 Apache-2.0 — original implementation, no third-party branding
-redistributed. Runtime artifacts (Debian rootfs, proot, code-server) are
+redistributed. Runtime artifacts (Ubuntu rootfs, proot, code-server) are
 fetched from their official sources under their own licenses. The editor's
 code-server and VS Code components are downloaded at install time under
 the MIT license — see NOTICE.md.

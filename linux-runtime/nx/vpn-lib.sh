@@ -1,7 +1,7 @@
 # vpn-lib.sh — nx vpn support (Noxs Tor over PRoot, VPN mode)
 # shellcheck shell=bash
 # Sourced by the nx dispatcher. Installs/activates the Tor daemon inside the
-# Noxs Debian environment, auto-tunes ConnLimit for PRoot file-descriptor
+# Noxs Ubuntu environment, auto-tunes ConnLimit for PRoot file-descriptor
 # limits, and can route NEW shells through the Tor SOCKS5 proxy ('nx vpn on').
 #
 # Overridable for offline tests:
@@ -158,7 +158,7 @@ nx_vpn_stop_tor() {
 nx_vpn_start_daemon() {
     local log="${NX_VPN_LOG:-/var/log/tor/noxs-start.log}"
     if id debian-tor >/dev/null 2>&1 && command -v runuser >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
-        # Prefer Debian's dedicated Tor user when we can drop privileges.
+        # Prefer Ubuntu's dedicated Tor user when we can drop privileges.
         nohup nx_vpn_as_root runuser -u debian-tor -- "$TOR_BIN" -f "$NX_VPN_TORRC" >>"$log" 2>&1 &
     else
         nohup "$TOR_BIN" -f "$NX_VPN_TORRC" >>"$log" 2>&1 &

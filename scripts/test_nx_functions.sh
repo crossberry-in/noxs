@@ -601,9 +601,21 @@ esac
 EOF
 chmod +x "$FAKEBIN/apt-cache"
 
+# Ubuntu-first fixtures: the doctor validates the Ubuntu identity, the
+# noble sources and the archive keyring through these overridable paths.
+printf 'ID=ubuntu\nVERSION_ID="24.04"\nVERSION_CODENAME=noble\n' > "$WORK/os.ubuntu24"
+cat > "$WORK/noble.sources" <<'NOXSRC'
+Types: deb
+URIs: https://ports.ubuntu.com/ubuntu-ports
+Suites: noble noble-updates noble-backports
+Components: main restricted universe multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+NOXSRC
+printf 'ubuntu-archive-keyring-fixture' > "$WORK/keyring.gpg"
 PKGM_ENV=(NOXS_PKG_MIRROR="http://127.0.0.1:18099"
           NOXS_PKG_CACHE_DIR="$WORK/cache" NOXS_TX_DIR="$WORK/run"
-          NOXS_OS_RELEASE="$WORK/os.debian" NOXS_APT_LISTS_DIR="$WORK/lists"
+          NOXS_OS_RELEASE="$WORK/os.ubuntu24" NOXS_APT_LISTS_DIR="$WORK/lists"
+          NOXS_APT_SOURCES="$WORK/noble.sources" NOXS_KEYRING="$WORK/keyring.gpg"
           NX_LIB_DIR="$NX_LIB_DIR")
 
 env "${PKGM_ENV[@]}" bash -c '. "'"$NX_LIB_DIR"'/pkg-lib.sh"; . "'"$NX_LIB_DIR"'/pkg-ui.sh"; . "'"$NX_LIB_DIR"'/pkg-manager.sh"; pkgm_search_cmd demo --json' \

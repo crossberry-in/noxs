@@ -1,6 +1,6 @@
 /*
- * Noxs — signed Debian APT bootstrap.
- * Installs/repairs CA certificates over signed Debian HTTP metadata first,
+ * Noxs — signed Ubuntu APT bootstrap.
+ * Installs/repairs CA certificates over signed Ubuntu HTTP metadata first,
  * then switches the sole source file to HTTPS and verifies a real TLS update.
  *
  * Reliability rules implemented here (see the setup-repair task spec):
@@ -38,7 +38,7 @@ class NoxsAptBootstrapper(
     fun initialize(force: Boolean = false, onLog: (String) -> Unit = {}): Result =
         synchronized(PROCESS_LOCK) {
             if (isCancelled()) throw SetupCancelledException()
-            if (!paths.rootfs.isDirectory) return@synchronized Result(false, "Debian rootfs is missing")
+            if (!paths.rootfs.isDirectory) return@synchronized Result(false, "Ubuntu rootfs is missing")
             if (!force && paths.aptReadyMarker.isFile) {
                 return@synchronized Result(true, "APT, dpkg and HTTPS were previously verified")
             }
@@ -104,7 +104,7 @@ class NoxsAptBootstrapper(
                 }
 
                 // 3 — signed HTTP metadata (bounded retries: network step).
-                onLog("Refreshing signed Debian package metadata over HTTP")
+                onLog("Refreshing signed Ubuntu package metadata over HTTP")
                 val httpUpdate = runWithRetry("signed HTTP apt update", aptCommand("update"), 240, onLog)
                 if (!requireSuccessful("signed HTTP apt update", httpUpdate, onLog)) {
                     return@synchronized Result(false, summarize("signed HTTP apt update", httpUpdate))
@@ -112,7 +112,7 @@ class NoxsAptBootstrapper(
                 NoxsLog.i(TAG, "HTTP apt update ok in ${httpUpdate.durationMs} ms")
 
                 if (interruptedConfiguration) {
-                    onLog("Repairing interrupted package dependencies from authenticated Debian repositories")
+                    onLog("Repairing interrupted package dependencies from authenticated Ubuntu repositories")
                     val dependencyRepair = run(
                         aptCommand("--fix-broken", "install", "--yes", "--no-install-recommends"),
                         300
@@ -131,18 +131,18 @@ class NoxsAptBootstrapper(
                 // already installed and verified, the (slow, repeated) apt
                 // installation is skipped and only the bundle is refreshed.
                 val packagesInstalled = run(
-                    AptBootstrapCommands.packageInstalledCommand("ca-certificates", "debian-archive-keyring"), 30
+                    AptBootstrapCommands.packageInstalledCommand("ca-certificates", "ubuntu-keyring"), 30
                 )
                 val alreadyVerified = !packagesInstalled.failed && packagesInstalled.output.isBlank()
                 if (alreadyVerified) {
                     onLog("ca-certificates and the archive keyring are already installed — refreshing the bundle")
                     NoxsLog.i(TAG, "certificate packages already installed; skipping redundant reinstall")
                 } else {
-                    onLog("Installing ca-certificates and the Debian archive keyring")
+                    onLog("Installing ca-certificates and the Ubuntu archive keyring")
                     val certInstall = runWithRetry(
                         "certificate package installation",
                         aptCommand("install", "--yes", "--no-install-recommends", "--reinstall",
-                            "ca-certificates", "debian-archive-keyring"),
+                            "ca-certificates", "ubuntu-keyring"),
                         300, onLog
                     )
                     if (!requireSuccessful("certificate package installation", certInstall, onLog)) {
@@ -168,7 +168,7 @@ class NoxsAptBootstrapper(
 
                 // HTTPS is enabled only after the CA bundle exists.
                 RootfsConfigurator.configureAptSources(paths, useHttps = true)
-                onLog("Refreshing signed Debian package metadata over validated HTTPS")
+                onLog("Refreshing signed Ubuntu package metadata over validated HTTPS")
                 val httpsUpdate = runWithRetry("HTTPS apt update", aptCommand("update"), 240, onLog)
                 if (!requireSuccessful("HTTPS apt update", httpsUpdate, onLog)) {
                     return@synchronized Result(false, summarize("HTTPS apt update", httpsUpdate))
@@ -214,7 +214,7 @@ class NoxsAptBootstrapper(
                 onLog("Verifying certificates: package and metadata state verified")
 
                 val markerTemp = File(paths.base, "${paths.aptReadyMarker.name}.tmp")
-                markerTemp.writeText("verified=${System.currentTimeMillis()}\nsuite=bookworm\ntransport=https\n")
+                markerTemp.writeText("verified=${System.currentTimeMillis()}\nsuite=noble\ndistro=ubuntu\ntransport=https\n")
                 if (paths.aptReadyMarker.exists() && !paths.aptReadyMarker.delete()) {
                     markerTemp.delete()
                     return@synchronized Result(false, "Cannot replace APT readiness marker")
@@ -224,7 +224,7 @@ class NoxsAptBootstrapper(
                     return@synchronized Result(false, "Cannot save APT readiness marker")
                 }
                 onLog("Completed: APT, dpkg, CA certificates, signed metadata and HTTPS verified")
-                NoxsLog.i(TAG, "APT initialized with signed Bookworm HTTPS sources")
+                NoxsLog.i(TAG, "APT initialized with signed Noble (Ubuntu 24.04) HTTPS sources")
                 Result(true)
             } catch (e: Exception) {
                 NoxsLog.e(TAG, "APT bootstrap failed", e)

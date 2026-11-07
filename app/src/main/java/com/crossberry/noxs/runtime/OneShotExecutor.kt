@@ -1,7 +1,7 @@
 /*
  * Noxs — original implementation.
  * One-shot executor: runs non-interactive maintenance commands inside the
- * Debian userspace (proot -0 → /bin/bash -c). Used by the manager screens.
+ * Ubuntu userspace (proot -0 → /bin/bash -c). Used by the manager screens.
  * All command construction is argv-based — no shell string interpolation of
  * untrusted values (ShellUtil.quote is applied where needed).
  */

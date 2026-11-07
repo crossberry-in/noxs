@@ -151,7 +151,13 @@ object DpkgState {
 /** Canonical verification commands (kept pure so tests pin the exact argv). */
 object AptBootstrapCommands {
 
-    val DNS_PROBE_HOSTS: List<String> = listOf("deb.debian.org", "security.debian.org")
+    /** Official Ubuntu repository hosts only (Ubuntu-first). arm64/armhf
+     *  guests use ports.ubuntu.com; amd64 builds use archive.ubuntu.com —
+     *  both are probed since DNS-only checks cost nothing and the app also
+     *  runs on x86_64 images. */
+    val DNS_PROBE_HOSTS: List<String> = listOf(
+        "ports.ubuntu.com", "archive.ubuntu.com"
+    )
 
     /** Prints "OK <host>" / "FAIL <host>" per repository host; always exits 0 — the parsed lines decide, not the exit code. */
     fun dnsProbeCommand(hosts: List<String> = DNS_PROBE_HOSTS): List<String> = listOf(

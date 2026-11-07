@@ -103,7 +103,7 @@ noxs_welcome() {
     _nx_welcome_qs "nx plug" "Plugin Store"
     _nx_welcome_qs "noxs code status" "VS Code editor"
     _nx_welcome_qs "nx cert-fix" "repair APT / certificates"
-    _nx_welcome_qs "sudo apt update" "refresh package metadata"
+    _nx_welcome_qs "apt update" "refresh package metadata"
     _nx_welcome_bar "$SEP" "$SEPR"
     _nx_welcome_row "$_NX_D" "crossberry.vercel.app | crossberryweb@gmail.com"
     _nx_welcome_bar "$BL" "$BR"

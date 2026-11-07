@@ -8,10 +8,13 @@ package com.crossberry.noxs.runtime
 object NoxsCliTemplate {
 
     val CLI = """#!/bin/bash
-# noxs — Noxs CLI for the Debian userspace (original implementation)
+# noxs — Noxs CLI for the Ubuntu 24.04 LTS userspace (original implementation)
 # Usage:
 #   noxs help
+#   noxs status
+#   noxs update
 #   noxs info
+#   noxs ubuntu status
 #   noxs code install|start|stop|restart|status|logs
 #   noxs docker install|start|stop|restart|status|info|test
 #   noxs storage [status|setup|map|repair|reset|ls|mkdir|cat|get|put|rm|cp|mv]
@@ -409,8 +412,8 @@ code_install() {
     done
     local arch
     arch="${'$'}(code_arch)" || return 1
-    if ! grep -qiE 'debian|bookworm|bullseye' /etc/os-release 2>/dev/null; then
-        err "this does not look like a Debian-based Noxs environment — aborting"
+    if ! grep -qiE 'id(_like)?=.*ubuntu|id(_like)?=.*debian' /etc/os-release 2>/dev/null; then
+        err "this does not look like an Ubuntu-based Noxs environment — aborting"
         return 1
     fi
     local ver=""
@@ -885,7 +888,7 @@ docker_test() {
 }
 
 docker_install() {
-    msg "Installing Docker from Debian repositories…"
+    msg "Installing Docker from Ubuntu repositories…"
     export DEBIAN_FRONTEND=noninteractive
     if ! sudo apt-get update; then
         err "apt update failed — check the network connection"
@@ -902,11 +905,31 @@ docker_install() {
 
 # ---------------------------------------------------------------- noxs info
 
+# Distro identity, read from the REAL /etc/os-release (never hardcoded).
+ubuntu_pretty_name() {
+    sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '"' || true
+}
+
+ubuntu_version_id() {
+    sed -n 's/^VERSION_ID=//p' /etc/os-release 2>/dev/null | tr -d '"' || true
+}
+
+ubuntu_codename() {
+    sed -n 's/^VERSION_CODENAME=//p' /etc/os-release 2>/dev/null | tr -d '"' || true
+}
+
+ubuntu_apt_host() {
+    sed -n 's/^URIs:\(.*\)/\1/p' /etc/apt/sources.list.d/noxs.sources 2>/dev/null \
+        | head -n 1 | sed 's|.*://||; s|/.*||'
+}
+
+apt_ready() {
+    [ -f /var/run/noxs/host/apt-ready ] || [ -f "${'$'}{NOXS_APT_READY:-/var/run/noxs/host/apt-ready}" ]
+}
+
 do_info() {
-    local debian_version
-    debian_version="${'$'}(head -1 /etc/debian_version 2>/dev/null || echo unknown)"
-    echo "Noxs — Debian 12 (bookworm) userspace"
-    echo "  Debian:      ${'$'}debian_version"
+    echo "Noxs — ${'$'}(ubuntu_pretty_name || echo 'Ubuntu 24.04 LTS') userspace"
+    echo "  distribution: Ubuntu ${'$'}(ubuntu_version_id || echo unknown) (${'$'}(ubuntu_codename || echo unknown))"
     echo "  environment: proot (Android device root is not available)"
     echo "  session:     ${'$'}{NOXS_SESSION_LABEL:-terminal}"
     echo "  account:     ${'$'}(id -un) (uid ${'$'}(id -u))"
@@ -915,6 +938,75 @@ do_info() {
     echo "  storage:     SAF document commands; no POSIX mount"
     echo "  sudo:        Noxs sandbox only"
     noxs-socket list 2>/dev/null | head -5 || true
+}
+
+# noxs status — quick health summary of the Noxs Ubuntu environment.
+do_status() {
+    local ok=0
+    echo "Noxs status"
+    printf '  distro:       %s\n' "${'$'}(ubuntu_pretty_name || echo unknown)"
+    printf '  arch:         %s\n' "${'$'}(dpkg --print-architecture 2>/dev/null || uname -m || echo unknown)"
+    if grep -qiE 'id=ubuntu' /etc/os-release 2>/dev/null; then
+        echo "  identity:     OK (genuine Ubuntu os-release)"
+    else
+        echo "  identity:     FAIL (os-release is not Ubuntu)"; ok=1
+    fi
+    if command -v apt-get >/dev/null 2>&1; then
+        echo "  apt:          OK (/usr/bin/apt-get)"
+    else
+        echo "  apt:          FAIL (apt-get missing)"; ok=1
+    fi
+    if [ -s /etc/apt/sources.list.d/noxs.sources ]; then
+        printf '  apt sources:  %s\n' "${'$'}(ubuntu_apt_host || echo missing)"
+    else
+        echo "  apt sources:  WARN (noxs.sources missing — run: nx cert-fix)"
+    fi
+    if [ -s /etc/ssl/certs/ca-certificates.crt ]; then
+        echo "  certificates: OK"
+    else
+        echo "  certificates: WARN (no CA bundle yet — run: nx cert-fix)"
+    fi
+    if apt_ready; then
+        echo "  apt state:    OK (bootstrap verified)"
+    else
+        echo "  apt state:    WARN (bootstrap not verified yet)"
+    fi
+    printf '  session:      %s\n' "${'$'}{NOXS_SESSION_LABEL:-terminal}"
+    return "${'$'}ok"
+}
+
+# noxs ubuntu status — Ubuntu-specific identity + repository report.
+do_ubuntu_status() {
+    echo "Ubuntu environment status"
+    printf '  pretty name:  %s\n' "${'$'}(ubuntu_pretty_name || echo unknown)"
+    printf '  version:      %s\n' "${'$'}(ubuntu_version_id || echo unknown)"
+    printf '  codename:     %s\n' "${'$'}(ubuntu_codename || echo unknown)"
+    printf '  kernel:       %s (Android host kernel via proot)\n' "${'$'}(uname -r 2>/dev/null || echo unknown)"
+    printf '  arch:         %s\n' "${'$'}(dpkg --print-architecture 2>/dev/null || uname -m || echo unknown)"
+    printf '  shell:        %s\n' "${'$'}{SHELL:-/bin/bash}"
+    printf '  apt sources:  %s\n' "${'$'}(ubuntu_apt_host || echo 'missing (run: nx cert-fix)')"
+    if [ -r /usr/share/keyrings/ubuntu-archive-keyring.gpg ]; then
+        echo "  keyring:      OK (ubuntu-archive-keyring.gpg)"
+    else
+        echo "  keyring:      FAIL (ubuntu-archive-keyring.gpg missing)"
+    fi
+    if apt-cache policy 2>/dev/null | grep -q .; then
+        echo "  package index: OK (apt-cache policy responds)"
+    else
+        echo "  package index: EMPTY (run: nx pkg update)"
+    fi
+}
+
+# noxs update — refresh APT metadata and upgrade the Ubuntu userspace tools
+# through the NATIVE APT environment (spec: all package operations use
+# Ubuntu's native APT).
+do_update() {
+    msg "Updating Ubuntu package metadata and packages…"
+    if ! sudo apt-get update; then
+        err "apt-get update failed — check the network connection"
+        return 1
+    fi
+    sudo DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Use-Pty=0 upgrade
 }
 
 case "${'$'}{1:-help}" in
@@ -946,6 +1038,14 @@ case "${'$'}{1:-help}" in
         esac
         ;;
     info) do_info ;;
+    status) do_status ;;
+    update) do_update ;;
+    ubuntu)
+        case "${'$'}{2:-status}" in
+            status) do_ubuntu_status ;;
+            *) err "usage: noxs ubuntu status"; exit 2 ;;
+        esac
+        ;;
     help|--help|-h)
         sed -n '2,11p' "${'$'}0"
         ;;

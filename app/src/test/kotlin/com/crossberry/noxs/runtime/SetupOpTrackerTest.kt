@@ -76,7 +76,7 @@ class SetupOpTrackerTest {
     fun `failure keeps the final elapsed and marks failed`() {
         val clock = Clock()
         val tracker = tracker(clock)
-        tracker.start("Refreshing signed Debian package metadata")
+        tracker.start("Refreshing signed Ubuntu package metadata")
         clock.ms += 7_500L
 
         val done = tracker.finish(success = false)

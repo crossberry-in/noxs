@@ -158,8 +158,8 @@ class AptRetryPolicyTest {
 
     @Test
     fun `dns resolution failure is a recognizable repeated signature`() {
-        val aptErr = "Err:1 http://deb.debian.org/debian bookworm InRelease\n" +
-            "  Temporary failure resolving 'deb.debian.org'"
+        val aptErr = "Err:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease\n" +
+            "  Temporary failure resolving 'ports.ubuntu.com'"
         val signature = AptRetryPolicy.failureSignature(aptErr, 100, timedOut = false)
         assertTrue(signature.contains("Temporary failure resolving"))
         // JUnit 4 overload: message FIRST, then expected, then actual.
@@ -182,20 +182,20 @@ class ConnectivityCheckTest {
 
     @Test
     fun `all repositories reachable parses as success`() {
-        val outcome = ConnectivityCheck.parse("OK deb.debian.org\nOK security.debian.org\n")
+        val outcome = ConnectivityCheck.parse("OK ports.ubuntu.com\nOK archive.ubuntu.com\n")
         assertTrue(outcome.success)
         assertNull(outcome.failedHost)
-        assertEquals(listOf("deb.debian.org", "security.debian.org"), outcome.okHosts)
+        assertEquals(listOf("ports.ubuntu.com", "archive.ubuntu.com"), outcome.okHosts)
         assertEquals("repositories reachable", ConnectivityCheck.describe(outcome))
     }
 
     @Test
     fun `broken dns names the first failing host`() {
-        val outcome = ConnectivityCheck.parse("FAIL deb.debian.org\nFAIL security.debian.org\n")
+        val outcome = ConnectivityCheck.parse("FAIL ports.ubuntu.com\nFAIL archive.ubuntu.com\n")
         assertFalse(outcome.success)
-        assertEquals("deb.debian.org", outcome.failedHost)
+        assertEquals("ports.ubuntu.com", outcome.failedHost)
         val message = ConnectivityCheck.describe(outcome)
-        assertTrue(message.contains("DNS lookup failed for deb.debian.org"))
+        assertTrue(message.contains("DNS lookup failed for ports.ubuntu.com"))
         assertTrue(message.contains("Bootstrap & Network"))
     }
 
@@ -210,10 +210,10 @@ class ConnectivityCheckTest {
 
     @Test
     fun `mixed output keeps both facts`() {
-        val outcome = ConnectivityCheck.parse("OK deb.debian.org\nFAIL security.debian.org\n")
+        val outcome = ConnectivityCheck.parse("OK ports.ubuntu.com\nFAIL archive.ubuntu.com\n")
         assertFalse(outcome.success)
-        assertEquals("security.debian.org", outcome.failedHost)
-        assertEquals(listOf("deb.debian.org"), outcome.okHosts)
+        assertEquals("archive.ubuntu.com", outcome.failedHost)
+        assertEquals(listOf("ports.ubuntu.com"), outcome.okHosts)
     }
 
     @Test
@@ -222,8 +222,8 @@ class ConnectivityCheckTest {
         assertEquals("/bin/bash", argv[0])
         assertEquals("-c", argv[1])
         assertTrue(argv[2].contains("getent ahostsv4"))
-        assertTrue(argv[2].contains("deb.debian.org"))
-        assertTrue(argv[2].contains("security.debian.org"))
+        assertTrue(argv[2].contains("ports.ubuntu.com"))
+        assertTrue(argv[2].contains("archive.ubuntu.com"))
         assertTrue(argv[2].contains("OK ") && argv[2].contains("FAIL "))
     }
 }
@@ -273,9 +273,9 @@ class AptBootstrapCommandsTest {
 
     @Test
     fun `package installed verification pins the dpkg status check`() {
-        val argv = AptBootstrapCommands.packageInstalledCommand("ca-certificates", "debian-archive-keyring")
+        val argv = AptBootstrapCommands.packageInstalledCommand("ca-certificates", "ubuntu-keyring")
         assertTrue(argv[2].contains("/usr/bin/dpkg -s ca-certificates"))
-        assertTrue(argv[2].contains("/usr/bin/dpkg -s debian-archive-keyring"))
+        assertTrue(argv[2].contains("/usr/bin/dpkg -s ubuntu-keyring"))
         // The status line is anchored with an escaped literal dollar (Kotlin
         // \$ escape) so the grep pattern reaches the shell intact.
         assertTrue(argv[2].contains("grep -q '^Status: install ok installed\$'"))

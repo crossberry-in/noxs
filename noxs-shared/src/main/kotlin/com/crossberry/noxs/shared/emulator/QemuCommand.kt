@@ -3,8 +3,8 @@
  * Pure QEMU command-line builder for the NoxOS guest VM (Noxs × NoxOS, M2).
  *
  * The machine flags and device set are the EXACT configuration verified
- * against Debian bookworm qemu-system-aarch64 7.2.22 in the M1 runtime
- * compatibility gate (Noxs tools/emulator/validate_runtime_gate.sh +
+ * against qemu-system-aarch64 7.2.22 (M1 runtime compatibility gate:
+ * Noxs tools/emulator/validate_runtime_gate.sh +
  * NoxOS tests/qemu_smoke.sh / qemu_graphics.sh / qemu_input.sh):
  *
  *   -M virt -cpu cortex-a53 -m <mem> -nic none

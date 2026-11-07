@@ -253,7 +253,7 @@ Environment:
 - working directory: {cwd}
 - architecture: {arch}
 - operating system: {os_name}
-- package manager: apt (Debian family)
+- package manager: apt (Ubuntu 24.04 LTS)
 - session id: {session_id}
 
 Rules:

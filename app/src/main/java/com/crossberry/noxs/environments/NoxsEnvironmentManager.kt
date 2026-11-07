@@ -1,12 +1,14 @@
 /*
  * Noxs — original implementation.
- * NoxsEnvironmentManager (spec §2, §32, §33, §34, §50, §63, §64):
+ * NoxsEnvironmentManager (spec §2, §32-§35, §50, Ubuntu-first §9):
  * provider discovery, environment registry, active-environment switching,
- * legacy Debian import and safe removal.
+ * legacy Debian import (migration source) and safe removal.
  *
  * The registry lives in app-private storage (environments/registry.json).
- * Existing Noxs Debian installations are detected and imported on upgrade —
- * never deleted, never reinstalled (spec §63).
+ * Fresh installs use Ubuntu 24.04 LTS ONLY (no Debian download path).
+ * Existing (pre-migration) Debian installations of upgrading users are
+ * detected and imported as a read-only legacy environment — never deleted,
+ * never reinstalled, user data preserved (spec §9 migration).
  */
 package com.crossberry.noxs.environments
 
@@ -75,7 +77,7 @@ class NoxsEnvironmentManager(private val context: Context) {
 
     /** Environment family of the active environment, or null for the legacy Debian. */
     fun activeFamilyIsApt(): Boolean {
-        val id = _activeId.value ?: return true // legacy base is Debian
+        val id = _activeId.value ?: return true // legacy base is Debian-family (apt)
         val env = environmentFor(id) ?: return true
         if (env.storagePath == legacyPaths.base.absolutePath) return true
         return runCatching {
@@ -129,8 +131,10 @@ class NoxsEnvironmentManager(private val context: Context) {
     // ----------------------------------------------------------- migration
 
     /**
-     * Existing Noxs Debian installation detected on upgrade (spec §63): import
-     * it as an environment, set it active, no reinstall required.
+     * Legacy Debian installation of an UPGRADING user detected (spec §9
+     * migration): import it read-only as the migration source, set it active
+     * so nothing breaks, no reinstall, no data erasure. Fresh installs never
+     * hit this path — they install Ubuntu 24.04 LTS through UbuntuProvider.
      */
     private fun importLegacyInstall() {
         if (!legacyPaths.isInstalled()) return
@@ -139,7 +143,7 @@ class NoxsEnvironmentManager(private val context: Context) {
         val imported = Environment(
             id = LEGACY_DEBIAN_ID,
             providerId = "debian",
-            displayName = "Debian 12",
+            displayName = "Debian 12 (legacy)",
             version = "bookworm",
             architecture = "arm64-v8a",
             variant = "bookworm",
@@ -151,7 +155,7 @@ class NoxsEnvironmentManager(private val context: Context) {
         )
         upsert(imported)
         if (_activeId.value == null) setActive(LEGACY_DEBIAN_ID)
-        NoxsLog.i("EnvManager", "Existing Debian environment imported (no reinstall required)")
+        NoxsLog.i("EnvManager", "Legacy Debian environment imported for migration (no reinstall, data kept)")
     }
 
     /**
@@ -208,7 +212,7 @@ class NoxsEnvironmentManager(private val context: Context) {
         if (taskManager.isRunning(id)) return false
         if (env.storagePath.startsWith(legacyPaths.base.absolutePath)) {
             // Legacy Debian removal also clears the legacy markers so the
-            // next start routes through the environment picker honestly.
+            // next start routes through the Ubuntu installer honestly.
             runCatching { legacyPaths.installMarker.delete() }
         }
         taskManager.removeEnvironmentFiles(env)
@@ -227,8 +231,8 @@ class NoxsEnvironmentManager(private val context: Context) {
 
     fun terminalProfile(id: String): TerminalProfile? {
         val env = environmentFor(id) ?: return null
-        // One environment: the Debian profile (legacy imports keep the
-        // "android" prompt host so pre-multi-env installs stay unchanged).
+        // One environment: the Ubuntu profile (the legacy Debian import keeps
+        // the "android" prompt host so pre-migration installs stay unchanged).
         return TerminalProfile(
             environmentId = env.id,
             displayName = env.displayName,
@@ -237,7 +241,7 @@ class NoxsEnvironmentManager(private val context: Context) {
             home = "/home/noxs",
             workingDirectory = "/home/noxs",
             environmentVariables = mapOf("NOXS" to "1"),
-            promptHost = if (env.storagePath == legacyPaths.base.absolutePath) "android" else "debian"
+            promptHost = if (env.storagePath == legacyPaths.base.absolutePath) "android" else "ubuntu"
         )
     }
 

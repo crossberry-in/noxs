@@ -82,8 +82,8 @@ class NoxsService : Service() {
         // Security bootstrap (APT/CA/TLS repair) runs here in the service
         // background: it must never gate shell creation. The terminal always
         // clears straight to an active shell while this runs. Only apt-family
-        // environments get the Debian APT bootstrap (spec §62 — no hard-coded
-        // Debian backend).
+        // environments get the Ubuntu APT bootstrap (spec §62 — no hard-coded
+        // distro backend).
         resources = NoxsResources(paths)
         launcher = ProotLauncher(paths, resources)
         sessions = NoxsSessionManager(paths, launcher, resources, center)

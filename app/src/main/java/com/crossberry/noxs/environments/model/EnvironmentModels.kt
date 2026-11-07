@@ -16,7 +16,7 @@ import com.crossberry.noxs.shared.MiniJson
 enum class PackageManagerKind { APT, PACMAN, PKG, NONE }
 
 /** Runtime family: how the userspace is structured (spec §24). */
-enum class EnvironmentFamily { DEBIAN, ARCH, TERMUX_NATIVE }
+enum class EnvironmentFamily { DEBIAN, UBUNTU, ARCH, TERMUX_NATIVE }
 
 /** Honest compatibility verdict (spec §5): never faked. */
 enum class CompatibilityLevel { SUPPORTED, LIMITED, UNSUPPORTED }
@@ -110,7 +110,7 @@ data class TerminalProfile(
     val home: String,
     val workingDirectory: String,
     val environmentVariables: Map<String, String>,
-    /** Prompt host label (noxs@debian, noxs@kali, noxs@arch … spec §61). */
+    /** Prompt host label (noxs@ubuntu for the Noxs environment — spec §4). */
     val promptHost: String
 )
 

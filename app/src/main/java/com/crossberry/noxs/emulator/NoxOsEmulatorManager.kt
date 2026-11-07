@@ -4,7 +4,7 @@
  *
  * Modeled on CodeServerManager: the manager owns ONE dedicated long-lived
  * proot process per VM (one-shot execs die with --kill-on-exit, so a VM
- * needs its own process). The QEMU process runs INSIDE the Debian proot
+ * needs its own process). The QEMU process runs INSIDE the Ubuntu proot
  * environment — exactly the M1-verified execution path — and exposes:
  *   - VNC display bound to 127.0.0.1 only (spec: localhost, no password;
  *     proot does not create a network namespace, so the app can connect)
@@ -17,10 +17,16 @@
  *   → spawn qemu via ProotLauncher (root login, VM dir bound at /noxs-vm)
  *   → wait for the VNC port to answer → state Running(port)
  *
+ * The whole pipeline reports LIVE setup progress: [setupProgress] carries a
+ * monotonic 0..100 percent + sub-phase (parsed from the apt/dpkg stream by
+ * [SetupProgressTracker]), and [installLines] carries the raw log tail shown
+ * live in the emulator window overlay.
+ *
  * HONEST STATUS (M2): implemented with limitations — compiled and device-
  * tested via the GitHub Actions APK pipeline only when pushed; the QEMU
  * command set and the VNC protocol path are verified in the M1 gate and
- * tools/emulator/verify_vnc_path.py on real bookworm QEMU 7.2.22. The VM
+ * tools/emulator/verify_vnc_path.py on real QEMU 7.2.22 (M1 gate); the
+ * guest runtime apt-installs QEMU 8.2 from Ubuntu noble. The VM
  * dies with the app process (M8 adds background lifecycle); snapshots and
  * SAF disk import are M3/M4.
  */
@@ -54,7 +60,7 @@ sealed class VmState {
     /** Short setup phase: dirs, config, kernel provisioning. */
     data class Preparing(val detail: String) : VmState()
 
-    /** qemu-system-aarch64 is being installed into the Debian rootfs via apt. */
+    /** qemu-system-aarch64 is being installed into the Ubuntu rootfs via apt. */
     data class InstallingRuntime(val lines: List<String>) : VmState()
 
     /** QEMU spawned, waiting for the VNC port to answer. */
@@ -84,6 +90,24 @@ class NoxOsEmulatorManager(
     /** Live apt output while qemu is being installed into the rootfs. */
     private val _installLines = MutableStateFlow<List<String>>(emptyList())
     val installLines: StateFlow<List<String>> get() = _installLines
+
+    /** Live setup percent + sub-phase for the whole boot pipeline (0..100). */
+    private val _setupProgress = MutableStateFlow(SetupProgress(0, SetupSubPhase.IDLE))
+    val setupProgress: StateFlow<SetupProgress> get() = _setupProgress
+
+    private val tracker = SetupProgressTracker()
+
+    private fun publishSetup() {
+        val snapshot = tracker.snapshot()
+        if (snapshot != _setupProgress.value) {
+            _setupProgress.value = snapshot
+        }
+    }
+
+    /** Appends stage headers / boot ticks to the live log (capped tail). */
+    private fun pushLogLine(line: String) {
+        _installLines.value = (_installLines.value + line).takeLast(LOG_TAIL_MAX)
+    }
 
     @Volatile private var managedProcess: Process? = null
 
@@ -168,6 +192,8 @@ class NoxOsEmulatorManager(
                 )
             val storage = storage()
             _state.value = VmState.Preparing("Creating VM storage")
+            tracker.beginPrepare(); publishSetup()
+            pushLogLine("── preparing VM storage ──")
 
             // Healthy VM already up? Reuse it (prevents duplicate starts).
             if (vmPid() != null) {
@@ -190,6 +216,8 @@ class NoxOsEmulatorManager(
                     IllegalStateException("APK assets unavailable")
                 )
             _state.value = VmState.Preparing("Provisioning NoxOS kernel")
+            tracker.beginKernel(); publishSetup()
+            pushLogLine("── provisioning NoxOS kernel ──")
             val assetBytes = try {
                 assets.open(VmStorage.KERNEL_ASSET_PATH).use { it.readBytes() }
             } catch (e: Exception) {
@@ -287,10 +315,15 @@ class NoxOsEmulatorManager(
             pump.isDaemon = true
             pump.start()
 
-            // Wait for real VNC readiness on the loopback.
+            // Wait for real VNC readiness on the loopback — the percent
+            // crawls 88 → 99 while the log shows elapsed seconds.
             val port = QemuCommand.vncPort(display)
             _state.value = VmState.Booting(display)
-            val deadline = System.currentTimeMillis() + BOOT_TIMEOUT_MS
+            tracker.beginBoot(); publishSetup()
+            pushLogLine("── booting NoxOS (waiting for guest display) ──")
+            val bootStarted = System.currentTimeMillis()
+            val deadline = bootStarted + BOOT_TIMEOUT_MS
+            var lastLoggedSecond = -1L
             while (System.currentTimeMillis() < deadline) {
                 if (!process.isAlive) {
                     val detail = storage.logTail(qemuLog, 6).lastOrNull { it.isNotBlank() }
@@ -300,9 +333,17 @@ class NoxOsEmulatorManager(
                     return@withContext Result.failure(IllegalStateException(detail))
                 }
                 if (vncAnswers(port)) {
+                    tracker.markRunning(); publishSetup()
                     _state.value = VmState.Running(display)
                     NoxsLog.i(TAG, "NoxOS VM running — VNC 127.0.0.1:$port (pid=${vmPid()})")
                     return@withContext Result.success(port)
+                }
+                val elapsed = System.currentTimeMillis() - bootStarted
+                tracker.tickBoot(elapsed, BOOT_TIMEOUT_MS); publishSetup()
+                val second = elapsed / 1000
+                if (second != lastLoggedSecond && second % 2 == 0L) {
+                    lastLoggedSecond = second
+                    pushLogLine("waiting for guest display… ${second}s")
                 }
                 delay(500)
             }
@@ -326,70 +367,115 @@ class NoxOsEmulatorManager(
      * ("E: Invalid operation $@"). The absolute path bypasses functions.
      */
     private suspend fun installQemuRuntime(launcher: ProotLauncher): IllegalStateException? {
-        for (cmd in listOf(
-            listOf("/usr/bin/apt-get", "update"),
-            listOf("/usr/bin/apt-get", "install", "-y", "--no-install-recommends", "qemu-system-arm")
-        )) {
-            val argv = try {
-                launcher.oneShotArgv(cmd, asRoot = true)
-            } catch (e: Exception) {
-                return IllegalStateException("runtime install spawn failed: ${e.message}")
-            }
-            val process = try {
-                val pb = ProcessBuilder(argv).redirectErrorStream(true)
-                launcher.applyEnvTo(pb, mapOf("NOXS_ROOT_LOGIN" to "1", "DEBIAN_FRONTEND" to "noninteractive"))
-                pb.start()
-            } catch (e: Exception) {
-                return IllegalStateException("runtime install spawn failed: ${e.message}")
-            }
-            process.outputStream.close()
-            val lines = mutableListOf<String>()
-            val reader = Thread {
-                try {
-                    process.inputStream.bufferedReader().forEachLine { synchronized(lines) { lines.add(it) } }
-                } catch (e: Exception) {
-                    // stream closed on cancellation
-                }
-            }
-            reader.isDaemon = true
-            reader.start()
+        tracker.beginUpdate(); publishSetup()
+        pushLogLine("── apt-get update ──")
+        runAptStep(launcher, listOf("/usr/bin/apt-get", "update")) { line ->
+            tracker.onLine(line); publishSetup()
+        }?.let { return it }
+
+        tracker.beginInstall(); publishSetup()
+        pushLogLine("── apt-get install qemu-system-arm ──")
+        // Dpkg::Use-Pty=0 forces dpkg's "Progress: [ NN %]" lines onto stdout
+        // so SetupProgressTracker can parse real unpack/configure percentages.
+        runAptStep(
+            launcher,
+            listOf(
+                "/usr/bin/apt-get", "-o", "Dpkg::Use-Pty=0",
+                "install", "-y", "--no-install-recommends", "qemu-system-arm"
+            )
+        ) { line ->
+            tracker.onLine(line); publishSetup()
+        }?.let { return it }
+        return null
+    }
+
+    /**
+     * Runs one apt command through the proot environment, streaming every
+     * output line live into [installLines] and the [onLine] callback (which
+     * feeds the percent tracker). Returns null on success, the failure
+     * reason otherwise.
+     *
+     * The FULL PATH (/usr/bin/apt-get) is deliberate and matches every other
+     * apt caller (bootstrap, docker setup, cert-fix): login shells source
+     * /etc/profile.d/noxs-pkg-guard.sh, which defines apt/apt-get wrapper
+     * FUNCTIONS — a bare "apt-get" would resolve to the function, and a
+     * broken generated function once passed a literal `$@` token to apt
+     * ("E: Invalid operation $@"). The absolute path bypasses functions.
+     */
+    private suspend fun runAptStep(
+        launcher: ProotLauncher,
+        cmd: List<String>,
+        onLine: (String) -> Unit
+    ): IllegalStateException? {
+        val argv = try {
+            launcher.oneShotArgv(cmd, asRoot = true)
+        } catch (e: Exception) {
+            return IllegalStateException("runtime install spawn failed: ${e.message}")
+        }
+        val process = try {
+            val pb = ProcessBuilder(argv).redirectErrorStream(true)
+            launcher.applyEnvTo(pb, mapOf("NOXS_ROOT_LOGIN" to "1", "DEBIAN_FRONTEND" to "noninteractive"))
+            pb.start()
+        } catch (e: Exception) {
+            return IllegalStateException("runtime install spawn failed: ${e.message}")
+        }
+        process.outputStream.close()
+        val lines = mutableListOf<String>()
+        val reader = Thread {
             try {
-                while (process.isAlive) {
-                    publishInstallLines(lines)
-                    delay(200)
-                }
-                val code = process.waitFor()
-                reader.join(2000)
-                publishInstallLines(lines)
-                if (code != 0) {
-                    val joined = synchronized(lines) { lines.toList() }
-                    // dpkg/apt lock contention (terminal setup runs in parallel)
-                    if (joined.any { it.contains("Could not get lock", ignoreCase = true) }) {
-                        return IllegalStateException(
-                            "APT is busy — the terminal may be finishing setup; try again in a minute"
-                        )
-                    }
+                process.inputStream.bufferedReader().forEachLine { synchronized(lines) { lines.add(it) } }
+            } catch (e: Exception) {
+                // stream closed on cancellation
+            }
+        }
+        reader.isDaemon = true
+        reader.start()
+        try {
+            var cursor = 0
+            while (process.isAlive) {
+                cursor = publishNewLines(lines, cursor, onLine)
+                delay(200)
+            }
+            val code = process.waitFor()
+            reader.join(2000)
+            publishNewLines(lines, cursor, onLine)
+            if (code != 0) {
+                val joined = synchronized(lines) { lines.toList() }
+                // dpkg/apt lock contention (terminal setup runs in parallel)
+                if (joined.any { it.contains("Could not get lock", ignoreCase = true) }) {
                     return IllegalStateException(
-                        "qemu runtime install failed (exit $code): " +
-                            joined.lastOrNull { it.isNotBlank() }?.takeLast(200)
+                        "APT is busy — the terminal may be finishing setup; try again in a minute"
                     )
                 }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                runCatching { process.destroyForcibly() }
-                throw e
-            } catch (e: Exception) {
-                runCatching { process.destroyForcibly() }
-                return IllegalStateException("runtime install failed: ${e.message}")
+                return IllegalStateException(
+                    "qemu runtime install failed (exit $code): " +
+                        joined.lastOrNull { it.isNotBlank() }?.takeLast(200)
+                )
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            runCatching { process.destroyForcibly() }
+            throw e
+        } catch (e: Exception) {
+            runCatching { process.destroyForcibly() }
+            return IllegalStateException("runtime install failed: ${e.message}")
         }
         return null
     }
 
-    private fun publishInstallLines(lines: List<String>) {
-        val snapshot = synchronized(lines) { lines.toList() }
-        if (snapshot.size != _installLines.value.size) {
-            _installLines.value = snapshot
+    /** Drains lines[cursor..] into the live log + tracker; returns the new
+     *  cursor. Called on a 200 ms cadence from [runAptStep]. */
+    private fun publishNewLines(
+        lines: List<String>,
+        cursor: Int,
+        onLine: (String) -> Unit
+    ): Int {
+        if (cursor >= lines.size) return cursor
+        for (i in cursor until lines.size) {
+            val line = synchronized(lines) { lines[i] }
+            pushLogLine(line)
+            onLine(line)
         }
+        return lines.size
     }
 
     private fun pickDisplay(): Int? {
@@ -471,8 +557,11 @@ class NoxOsEmulatorManager(
     companion object {
         private const val TAG = "NoxOsEmulator"
 
-        /** qemu-system-aarch64 path inside the Debian rootfs (M1 manifest). */
+        /** qemu-system-aarch64 path inside the Ubuntu rootfs (M1 manifest). */
         const val QEMU_GUEST_PATH: String = "usr/bin/qemu-system-aarch64"
+
+        /** Cap on the live log tail published to the UI. */
+        const val LOG_TAIL_MAX: Int = 200
 
         /** TCG boot on a phone is not instant; the M1 gate uses 90s too. */
         const val BOOT_TIMEOUT_MS: Long = 90_000L

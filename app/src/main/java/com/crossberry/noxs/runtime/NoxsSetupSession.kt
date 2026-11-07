@@ -135,7 +135,7 @@ class NoxsSetupSession(
         2 -> "Verifying filesystem"
         3 -> "Preparing workspace"
         4 -> "Preparing environment"
-        5 -> "Downloading Debian 12 Bookworm"
+        5 -> "Downloading Ubuntu 24.04 LTS"
         6 -> "Extracting rootfs"
         7 -> "Preparing environment"
         8 -> "Creating Linux account"
@@ -153,8 +153,8 @@ class NoxsSetupSession(
                 "Checking repositories"
             lower.contains("checking for interrupted dpkg configuration") ->
                 "Checking for interrupted dpkg configuration"
-            lower.contains("refreshing signed debian package metadata") ->
-                "Refreshing signed Debian package metadata"
+            lower.contains("refreshing signed ubuntu package metadata") ->
+                "Refreshing signed Ubuntu package metadata"
             lower.contains("installing ca-certificates") ||
                 lower.contains("installing or repairing ca-certificates") ->
                 "Installing ca-certificates"
@@ -163,7 +163,7 @@ class NoxsSetupSession(
             lower.contains("verifying certificates") ->
                 "Verifying certificates"
             lower.contains("archive keyring") ->
-                "Installing Debian archive keyring"
+                "Installing Ubuntu archive keyring"
             lower.contains("finishing interrupted package configuration") ||
                 lower.contains("retrying dpkg configuration") ->
                 "Repairing pending dpkg configuration"
@@ -335,7 +335,7 @@ class NoxsSetupSession(
         if (paths.isInstalled()) return
         synchronized(this) {
             if (_state.value != State.IDLE) return
-            console("\u001b[1;32mNoxs Linux\u001b[0m \u001b[90m— Debian 12 (Bookworm) · setup console\u001b[0m\r\n")
+            console("\u001b[1;32mNoxs Linux\u001b[0m \u001b[90m— Ubuntu 24.04 LTS (Noble Numbat) · setup console\u001b[0m\r\n")
             if (logFile.isFile && logFile.length() > 0) {
                 console("\u001b[33m[ noxs ] A previous setup attempt was interrupted; verified partial downloads will be reused.\u001b[0m\r\n")
             }
@@ -610,8 +610,8 @@ class NoxsSetupSession(
         if (current != State.FAILED && current != State.CANCELLED) return
         cancelRequested = false
         _state.value = State.REPAIRING
-        setupActivityId?.let { center?.attachOutput(it, "repairing Debian package layer") }
-        console("\r\n\u001b[1;32m[ Noxs ]\u001b[0m Repairing Debian package layer (dpkg recovery + signed HTTPS update)…\r\n")
+        setupActivityId?.let { center?.attachOutput(it, "repairing Ubuntu package layer") }
+        console("\r\n\u001b[1;32m[ Noxs ]\u001b[0m Repairing Ubuntu package layer (dpkg recovery + signed HTTPS update)…\r\n")
         scope.launch {
             val launcher = ProotLauncher(paths, NoxsResources(paths))
             val outcome: NoxsAptBootstrapper.Result? = try {

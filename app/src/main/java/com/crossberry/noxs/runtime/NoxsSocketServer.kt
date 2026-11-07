@@ -1,11 +1,11 @@
 /*
  * Noxs — original implementation.
- * Android↔Debian unix-socket bridge.
+ * Android↔Ubuntu unix-socket bridge.
  *
  * Two directions (docs/UNIX-SOCKETS.md):
  *  1. Control socket (this file): an Android LocalServerSocket on the abstract
  *     namespace ("noxs.control") serving JSON status queries to the app UI.
- *  2. Filesystem sockets: processes inside the Debian userspace create real
+ *  2. Filesystem sockets: processes inside the Ubuntu userspace create real
  *     AF_UNIX sockets under /var/run/noxs/ (physically inside the app-private
  *     rootfs). Android apps can connect to them through the physical path —
  *     no privilege escalation involved, everything stays in the sandbox.
@@ -102,7 +102,7 @@ class NoxsSocketServer(
 
         /**
          * Physical path for a virtual socket path inside the rootfs — lets
-         * Android clients connect to Debian-side AF_UNIX sockets.
+         * Android clients connect to Ubuntu-side AF_UNIX sockets.
          */
         fun physicalSocketPath(paths: NoxsPaths, virtualPath: String): String =
             com.crossberry.noxs.shared.SocketPathValidator.physicalPath(

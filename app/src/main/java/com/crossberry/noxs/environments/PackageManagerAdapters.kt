@@ -4,7 +4,8 @@
  * the environment's real package manager. UI code NEVER constructs raw
  * package-manager commands.
  *
- * Noxs ships exactly ONE environment — Debian 12 — so the only adapter is
+ * Noxs ships exactly ONE environment — Ubuntu 24.04 LTS — so the only
+ * adapter is
  * apt. The lookup still goes through [PackageManagerKind] so optional
  * component installs degrade honestly (null) instead of guessing.
  *

@@ -5,7 +5,7 @@
  * Noxs never fakes a Docker daemon, never fabricates /var/run/docker.sock,
  * and never claims container support that the environment cannot provide.
  * The probe reports the REAL state:
- *   - Docker CLI: installed inside Debian (via apt) or not.
+ *   - Docker CLI: installed inside Ubuntu (via apt) or not.
  *   - Docker Engine: reachable ONLY when `docker info` actually succeeds.
  * A failed `docker info` keeps its real error text as the reason.
  */
@@ -78,7 +78,7 @@ object NoxsDockerProbe {
     }
 
     /**
-     * Real probe inside the Debian userspace. All failures surface honestly.
+     * Real probe inside the Ubuntu userspace. All failures surface honestly.
      * `docker info` runs as the sandbox root (the way `sudo docker info`
      * would) so a running engine is detected without socket-permission noise.
      */

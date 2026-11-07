@@ -18,8 +18,16 @@ object NoxsConstants {
     const val DEFAULT_ROOT_HOME = "/root"
     const val DEFAULT_SHELL = "/bin/bash"
 
-    /** Default root filesystem release bootstrapped by Noxs. */
-    const val DEFAULT_DEBIAN_SUITE = "bookworm"
+    /** Default root filesystem release bootstrapped by Noxs (Ubuntu-first). */
+    const val DEFAULT_UBUNTU_RELEASE = "noble"
+    const val DEFAULT_UBUNTU_VERSION_ID = "24.04"
+    const val DEFAULT_UBUNTU_CODENAME = "Noble Numbat"
+
+    /** Ubuntu APT repository hosts. arm64/armhf live on the ports mirror;
+     *  amd64 (x86_64 app builds / emulators) uses the main archive. */
+    const val UBUNTU_PORTS_HOST = "ports.ubuntu.com"
+    const val UBUNTU_ARCHIVE_HOST = "archive.ubuntu.com"
+    const val UBUNTU_SECURITY_HOST = "security.ubuntu.com"
 
     /** Runtime state directories inside the rootfs (FHS). */
     const val RUN_DIR = "/run"

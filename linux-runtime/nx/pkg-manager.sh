@@ -358,10 +358,10 @@ pkgm_search_cmd() {
             version=$(apt-cache policy "$name" 2>/dev/null | awk '/Candidate:/{print $2; exit}')
             if [ "${NOXS_PKG_JSON:-0}" = "1" ]; then
                 [ "$printed" -gt 0 ] && printf ','
-                printf '{"name":"%s","source":"debian-official","version":"%s"}\n' "$name" "$version"
+                printf '{"name":"%s","source":"ubuntu-official","version":"%s"}\n' "$name" "$version"
             else
                 [ "$printed" -eq 0 ] && printf '%-22s %-16s %-24s %-8s %s\n' "NAME" "SOURCE" "VERSION" "ARCH" "DESCRIPTION"
-                printf '%-22s %-16s %-24s %-8s %s\n' "$name" "debian-official" "$version" "$arch_now" "$desc"
+                printf '%-22s %-16s %-24s %-8s %s\n' "$name" "ubuntu-official" "$version" "$arch_now" "$desc"
             fi
             printed=$((printed + 1))
         done <<EOF
@@ -422,7 +422,7 @@ pkgm_info_cmd() {
     fi
     if pkgm_detect_os && pkgm_is_distro && [ "$src" = "unknown" ]; then
         if apt-cache show "$name" >/dev/null 2>&1; then
-            src="debian-official"
+            src="ubuntu-official"
             ver=$(apt-cache policy "$name" 2>/dev/null | awk '/Candidate:/{print $2; exit}')
         fi
     fi
@@ -490,7 +490,7 @@ pkgm_install_cmd() {
     if [ -z "$src" ]; then
         pkgm_detect_os
         if pkgm_is_distro && apt-cache show "$name" >/dev/null 2>&1; then
-            src="debian-official"
+            src="ubuntu-official"
             ver=$(apt-cache policy "$name" 2>/dev/null | awk '/Candidate:/{print $2; exit}')
         fi
     fi
@@ -695,7 +695,7 @@ EOF
         return "$(pkgm_rc DEPENDENCY_RESOLUTION_FAILED)"
     fi
 
-    local src_note="official Debian repositories"
+    local src_note="official Ubuntu repositories"
     [ "$from_mirror" -gt 0 ] && src_note="Noxs mirror ($from_mirror file(s)) + official fallback"
     [ "$hits" -gt 0 ] && [ "$from_mirror" -eq 0 ] && src_note="sha256-keyed cache ($hits hit(s))"
     ui_result OK "$name $ver $arch — $n package(s) installed via $src_note"
@@ -836,6 +836,46 @@ pkgm_doctor_cmd() {
         warns=$((warns + 1))
     else
         say "PASS  OS: $PKG_OS (no native apt — Noxs packages only)"
+    fi
+    if pkgm_is_distro; then
+        # Ubuntu-first identity + repository validation (Ubuntu-first spec $6).
+        # Paths are env-overridable so the functional tests can run against
+        # fixture files without touching a real installation.
+        local noxs_sources="${NOXS_APT_SOURCES:-/etc/apt/sources.list.d/noxs.sources}"
+        local ubuntu_keyring="${NOXS_KEYRING:-/usr/share/keyrings/ubuntu-archive-keyring.gpg}"
+        if grep -qi '^ID=ubuntu' "$PKG_OS_RELEASE" 2>/dev/null; then
+            say "PASS  Ubuntu identity (os-release ID=ubuntu)"
+        else
+            say "FAIL  os-release is not Ubuntu — Noxs ships Ubuntu 24.04 LTS only"
+            fails=$((fails + 1))
+        fi
+        local src_host
+        src_host=$(sed -n 's/^URIs://p' "${noxs_sources}" 2>/dev/null | head -n 1 | sed 's|.*://||; s|/.*||')
+        case "$src_host" in
+            ports.ubuntu.com|archive.ubuntu.com)
+                say "PASS  Ubuntu repositories ($src_host)"
+                ;;
+            "")
+                say "FAIL  APT sources missing — run: nx cert-fix"
+                fails=$((fails + 1))
+                ;;
+            *)
+                say "FAIL  unexpected APT host $src_host (expected ports.ubuntu.com)"
+                fails=$((fails + 1))
+                ;;
+        esac
+        if [ -r "$ubuntu_keyring" ]; then
+            say "PASS  Ubuntu archive keyring present"
+        else
+            say "FAIL  ubuntu-archive-keyring.gpg missing — run: nx cert-fix"
+            fails=$((fails + 1))
+        fi
+        if dpkg --print-architecture >/dev/null 2>&1; then
+            say "PASS  dpkg architecture: $(dpkg --print-architecture)"
+        else
+            say "FAIL  dpkg --print-architecture failed"
+            fails=$((fails + 1))
+        fi
     fi
     if pkgm_is_distro; then
         if pkgm_lists_ok; then

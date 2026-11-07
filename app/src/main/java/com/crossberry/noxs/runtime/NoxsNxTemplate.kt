@@ -24,8 +24,8 @@ object NoxsNxTemplate {
 #   nx pkg search <name>       Search: cache -> Noxs API -> distro -> registry
 #   nx pkg install <name>      Branded installer w/ live single-line progress
 #   nx pkg update [--full]     Refresh package indexes (apt + Noxs)
-#   nx pkg list                Installed packages (Debian + Noxs)
-#   nx pkg remove <name>       Remove a Debian or Noxs package
+#   nx pkg list                Installed packages (Ubuntu + Noxs)
+#   nx pkg remove <name>       Remove an Ubuntu or Noxs package
 #   nx pkg doctor              Health check for the package layer
 #   nx install <name>[@version]
 #   nx install -git @user/repo[@version]
@@ -66,8 +66,8 @@ Package commands:
   nx pkg install <name> Install with the Noxs installer UI and live progress
   nx pkg update [--full]
                         Refresh package indexes; --full runs the upgrade
-  nx pkg list           Installed packages (Debian + Noxs)
-  nx pkg remove <name>  Remove a Debian or Noxs package
+  nx pkg list           Installed packages (Ubuntu + Noxs)
+  nx pkg remove <name>  Remove an Ubuntu or Noxs package
   nx pkg doctor         Health check for the package layer
 
 Install commands:
@@ -184,7 +184,7 @@ case "§{1:-}" in
                 ;;
             install)
                 # Noxs-branded installer UI with live single-line progress;
-                # Debian/Ubuntu through native apt, Noxs packages through
+                # Ubuntu through native apt, Noxs packages through
                 # the custom installer, mirror-first download with official
                 # fallback and sha256-keyed caching.
                 # shellcheck source=/dev/null

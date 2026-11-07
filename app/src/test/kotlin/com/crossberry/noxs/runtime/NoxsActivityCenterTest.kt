@@ -45,7 +45,7 @@ class NoxsActivityCenterTest {
     fun `session lifecycle registers and completes`() {
         val record = center.register(
             title = "Terminal — shell-1",
-            command = "proot · Debian 12",
+            command = "proot · Ubuntu 24.04",
             sessionId = "shell-1",
             pid = 4242
         )
@@ -151,7 +151,7 @@ class NoxsActivityCenterTest {
     @Test
     fun `records survive persistence round trip`() {
         val record = center.register(
-            title = "Terminal — shell-1", command = "proot · Debian 12",
+            title = "Terminal — shell-1", command = "proot · Ubuntu 24.04",
             sessionId = "shell-1", pid = 42, workingDirectory = "/home/noxs"
         )
         center.attachOutput(record.activityId, "npm run build")
