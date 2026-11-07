@@ -317,11 +317,18 @@ class NoxOsEmulatorManager(
      * Streams `apt-get update && apt-get install -y --no-install-recommends
      * qemu-system-arm` (the M1 closure seed package) through the proot
      * environment. Returns null on success, the failure reason otherwise.
+     *
+     * The FULL PATH (/usr/bin/apt-get) is deliberate and matches every other
+     * apt caller (bootstrap, docker setup, cert-fix): login shells source
+     * /etc/profile.d/noxs-pkg-guard.sh, which defines apt/apt-get wrapper
+     * FUNCTIONS — a bare "apt-get" would resolve to the function, and a
+     * broken generated function once passed a literal `$@` token to apt
+     * ("E: Invalid operation $@"). The absolute path bypasses functions.
      */
     private suspend fun installQemuRuntime(launcher: ProotLauncher): IllegalStateException? {
         for (cmd in listOf(
-            listOf("apt-get", "update"),
-            listOf("apt-get", "install", "-y", "--no-install-recommends", "qemu-system-arm")
+            listOf("/usr/bin/apt-get", "update"),
+            listOf("/usr/bin/apt-get", "install", "-y", "--no-install-recommends", "qemu-system-arm")
         )) {
             val argv = try {
                 launcher.oneShotArgv(cmd, asRoot = true)

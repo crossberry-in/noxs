@@ -295,6 +295,14 @@ object RootfsConfigurator {
             val rootfs = paths.rootfs
             writeFile(File(rootfs, "etc/profile.d/noxs.sh"), noxsProfile("android"))
             File(rootfs, "etc/profile.d/noxs.sh").setExecutable(false)
+            // Migration v14: also rewrite the package-manager guard. The v13
+            // and earlier template emitted a literal backslash before "$@"
+            // (Kotlin raw strings do not process \\ escapes), so the shell
+            // function passed the literal token "$@" to apt
+            // ("E: Invalid operation $@"). Rewriting the file here repairs
+            // every existing environment without a reinstall.
+            writeFile(File(rootfs, "etc/profile.d/noxs-pkg-guard.sh"), NOXS_PKG_GUARD_SH)
+            File(rootfs, "etc/profile.d/noxs-pkg-guard.sh").setExecutable(false)
             installWelcomeLib(rootfs)
             val marker = "# --- Noxs interactive shell setup ---"
             val snippet = bashrcSnippet("android", "Noxs Debian 12 (bookworm)", "sudo apt update")
@@ -342,8 +350,14 @@ object RootfsConfigurator {
     //    (os-release, uname, user), NO_COLOR/narrow fallbacks; migration
     //    installs the lib and rewrites the bashrc blocks in existing
     //    environments without a reinstall.
+    // 13: nx pkg progress surface (single-line live install output).
+    // 14: pkg-guard repair — the guard template's "$@" was emitted as the
+    //    literal characters \\$@ (Kotlin raw strings keep the backslash), so
+    //    every apt/apt-get call through the guard function fed apt the token
+    //    "$@" ("E: Invalid operation $@"). The fixed template is rewritten
+    //    into existing environments by the migration refresh below.
     // internal: asserted from unit tests (NoxsNxAiTest migration marker check)
-    internal val NX_PACKAGE_SYSTEM_VERSION = "13"
+    internal val NX_PACKAGE_SYSTEM_VERSION = "14"
 
     /** Guest lib files removed by a migration version — deleted on update. */
     private val RETIRED_LIB_FILES = listOf("env-lib.sh")
@@ -711,11 +725,11 @@ object RootfsConfigurator {
         }
         apt() {
             if noxs_pkg_busy; then noxs_pkg_busy_msg; return 1; fi
-            command apt "\$@"
+            command apt "${'$'}@"
         }
         apt-get() {
             if noxs_pkg_busy; then noxs_pkg_busy_msg; return 1; fi
-            command apt-get "\$@"
+            command apt-get "${'$'}@"
         }
     """.trimIndent()
 
