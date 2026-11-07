@@ -11,7 +11,7 @@ import org.junit.rules.TemporaryFolder
 
 /**
  * `nx pkg` Package Manager invariants: the distro-aware front end must
- * ship with the package system (migration version 13), route every
+ * ship with the package system (migration version 14), route every
  * Debian/Ubuntu install through the NATIVE apt engine with the signed
  * trust chain intact (print-uris hashes verified, never bypassed), use
  * the Noxs mirror only as an accelerator with an official fallback, and
