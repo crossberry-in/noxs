@@ -139,13 +139,18 @@ object Rfb {
     /**
      * Parses the 24-byte fixed part of ServerInit (after ClientInit):
      * u16 width, u16 height, 16-byte pixel format, u32 name length,
-     * followed by the name bytes ([nameBytes]).
+     * followed by the name bytes ([nameBytes]). The name-length field is
+     * authoritative — [nameBytes] must carry exactly that many bytes, or
+     * the stream is out of sync and must not be trusted further.
      */
     fun serverInit(fixed: ByteArray, nameBytes: ByteArray): ServerInit {
         require(fixed.size >= 24) { "ServerInit fixed part must be 24 bytes" }
         val width = getU16(fixed, 0)
         val height = getU16(fixed, 2)
         val nameLen = getU32(fixed, 20).toInt()
+        require(nameBytes.size == nameLen) {
+            "ServerInit name mismatch: field says $nameLen, got ${nameBytes.size} bytes"
+        }
         val name = String(nameBytes, Charsets.ISO_8859_1)
         return ServerInit(width, height, name)
     }

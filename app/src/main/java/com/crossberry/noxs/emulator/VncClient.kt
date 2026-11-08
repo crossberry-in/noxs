@@ -116,54 +116,10 @@ class VncClient(
             val out = DataOutputStream(s.getOutputStream())
             dataOut = out
 
-            // 1. ProtocolVersion
-            val handshake = ByteArray(12)
-            input.readFully(handshake)
-            if (!Rfb.isSupportedVersion(handshake)) {
-                throw IllegalStateException("unsupported RFB version: ${String(handshake, Charsets.US_ASCII)}")
-            }
-            val minor = Rfb.versionMinor(handshake) ?: 3
-            out.write(Rfb.PROTOCOL_REPLY.toByteArray(Charsets.US_ASCII))
-            out.flush()
-            // 2. Security: 3.3 server picks the type; 3.7+ sends a list.
-            if (minor == 3) {
-                val chosen = readU32(input).toInt()
-                if (chosen != Rfb.SECURITY_TYPE_NONE) {
-                    throw IllegalStateException("server requires auth type $chosen")
-                }
-            } else {
-                val count = input.readUnsignedByte()
-                if (count == 0) {
-                    val reasonLen = readU32(input).toInt()
-                    val reason = ByteArray(reasonLen)
-                    input.readFully(reason)
-                    throw IllegalStateException("server refused: ${String(reason, Charsets.UTF_8)}")
-                }
-                val types = ByteArray(count)
-                input.readFully(types)
-                if (!types.any { it.toInt() == Rfb.SECURITY_TYPE_NONE }) {
-                    throw IllegalStateException("no None security type offered")
-                }
-                out.write(Rfb.SECURITY_TYPE_NONE)
-                out.flush()
-                if (minor >= 8) {
-                    val result = readU32(input).toInt()
-                    if (result != 0) {
-                        throw IllegalStateException("security handshake failed ($result)")
-                    }
-                }
-            }
-
-            // 3. ClientInit (shared) + ServerInit
-            out.write(1) // share the desktop
-            out.flush()
-            val fixed = ByteArray(24)
-            input.readFully(fixed)
-            val nameLen = readU32(input).toInt()
-            require(nameLen in 0..64_000) { "bad server name length" }
-            val nameBytes = ByteArray(nameLen)
-            if (nameLen > 0) input.readFully(nameBytes)
-            val init = Rfb.serverInit(fixed, nameBytes)
+            // 1–3. ProtocolVersion + Security + ClientInit/ServerInit.
+            // The byte-level contract lives in VncHandshake (unit tested
+            // against a spec-accurate synthetic QEMU server stream).
+            val init = VncHandshake.performHandshake(input, out)
             listener.onConnected(init.width, init.height, init.name)
 
             // 4. Our pixel format + raw encoding + first full update request.
