@@ -31,6 +31,10 @@ class VncClient(
 ) {
 
     interface Listener {
+        /** Connect attempt started (before the TCP connect). Lets the UI
+         *  surface CONNECTING separately from the handshake that follows. */
+        fun onConnecting()
+
         /** ServerInit parsed — allocate the framebuffer bitmap here. */
         fun onConnected(width: Int, height: Int, name: String)
 
@@ -106,6 +110,7 @@ class VncClient(
 
     private fun runLoop() {
         var error: String? = null
+        listener.onConnecting()
         try {
             val s = Socket()
             socket = s
@@ -202,7 +207,7 @@ class VncClient(
             // close() during handshake
         } catch (e: Exception) {
             if (!closedByUs) {
-                NoxsLog.w("VncClient", "connection ended: ${e.message}")
+                NoxsLog.w(LOG_TAG, "connection ended: ${e.message}")
                 error = e.message ?: e.javaClass.simpleName
             }
         } finally {
@@ -216,6 +221,9 @@ class VncClient(
         input.readInt().toLong() and 0xFFFFFFFFL
 
     companion object {
+        /** Structured tag (integration spec §15) — never credentials. */
+        private const val LOG_TAG = "NOXS_VNC"
+
         private const val CONNECT_TIMEOUT_MS = 4_000
         private const val READ_TIMEOUT_MS = 30_000
 

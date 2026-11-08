@@ -35,6 +35,19 @@
             android:singleLine="true"
             android:ellipsize="end" />
 
+        <!-- VNC bridge connection state (lifecycle spec: CONNECT →
+             HANDSHAKE → SYNC → LIVE, bounded RC n/5 while reconnecting) -->
+        <TextView
+            android:id="@+id/emulator_conn_chip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="6dp"
+            android:fontFamily="monospace"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            android:contentDescription="@string/emulator_conn_live" />
+
         <TextView
             android:id="@+id/btn_vm_logs"
             android:layout_width="36dp"

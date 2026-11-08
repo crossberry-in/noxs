@@ -604,6 +604,15 @@
     <string name="emulator_stage_download">Downloading packages…</string>
     <string name="emulator_stage_dpkg">Installing packages…</string>
 
+    <!-- VNC bridge connection states (top-bar status chip, lifecycle spec) -->
+    <string name="emulator_conn_connecting">VNC·CONNECT</string>
+    <string name="emulator_conn_handshake">VNC·HANDSHAKE</string>
+    <string name="emulator_conn_sync">VNC·SYNC</string>
+    <string name="emulator_conn_live">VNC·LIVE</string>
+    <string name="emulator_conn_reconnect">VNC·RC %1$d/%2$d</string>
+    <string name="emulator_conn_failed">VNC·ERROR</string>
+    <string name="emulator_status_stopping">Stopping NoxOS VM…</string>
+
     <string name="action_back">‹</string>
     <string name="editor_open_terminal">Open in Terminal</string>
     <string name="editor_action_reload">Reload</string>
