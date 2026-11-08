@@ -63,8 +63,18 @@ sealed class VmState {
     /** qemu-system-aarch64 is being installed into the Ubuntu rootfs via apt. */
     data class InstallingRuntime(val lines: List<String>) : VmState()
 
+    /** QEMU process spawned, the guest has not opened the VNC port yet.
+     *  Lifecycle spec: STARTING_QEMU (the port-wait phase below is
+     *  WAITING_FOR_VNC — the two are kept separate so a hang is always
+     *  attributable to either the process or the display). */
+    data class StartingQemu(val vncDisplay: Int) : VmState()
+
     /** QEMU spawned, waiting for the VNC port to answer. */
     data class Booting(val vncDisplay: Int) : VmState()
+
+    /** Graceful stop in flight (SIGTERM → proot teardown). Lifecycle
+     *  spec: STOPPING — the UI must never look idle while QEMU lives. */
+    object Stopping : VmState()
 
     /** VNC answers on 127.0.0.1:<port> — the display bridge can connect. */
     data class Running(val vncDisplay: Int) : VmState()
@@ -292,6 +302,8 @@ class NoxOsEmulatorManager(
             process.outputStream.close()
             managedProcess = process
             activeDisplay = display
+            _state.value = VmState.StartingQemu(display)
+            NoxsLog.i(TAG_QEMU, "qemu spawned — display=$display pidfile=${storage.guestQemuPidPath}")
             // Stale pidfile from a previous VM would poison vmPid() until the
             // guest overwrites it — remove it before boot (QEMU rewrites it).
             runCatching { storage.qemuPidFile.delete() }
@@ -329,14 +341,20 @@ class NoxOsEmulatorManager(
                     val detail = storage.logTail(qemuLog, 6).lastOrNull { it.isNotBlank() }
                         ?.takeLast(200) ?: "QEMU exited during startup"
                     _state.value = VmState.Failed("QEMU exited during startup: $detail")
+                    NoxsLog.e(TAG_QEMU, "qemu exited during startup: $detail")
                     managedProcess = null
                     return@withContext Result.failure(IllegalStateException(detail))
                 }
                 if (vncAnswers(port)) {
                     tracker.markRunning(); publishSetup()
                     _state.value = VmState.Running(display)
-                    NoxsLog.i(TAG, "NoxOS VM running — VNC 127.0.0.1:$port (pid=${vmPid()})")
+                    NoxsLog.i(TAG_QEMU, "NoxOS VM running — VNC 127.0.0.1:$port (pid=${vmPid()})")
                     return@withContext Result.success(port)
+                }
+                // The process is up but the display is not answering yet —
+                // STARTING_QEMU → WAITING_FOR_VNC (Booting).
+                if (_state.value is VmState.StartingQemu) {
+                    _state.value = VmState.Booting(display)
                 }
                 val elapsed = System.currentTimeMillis() - bootStarted
                 tracker.tickBoot(elapsed, BOOT_TIMEOUT_MS); publishSetup()
@@ -516,6 +534,9 @@ class NoxOsEmulatorManager(
                 _state.value = VmState.Idle
                 return@withContext Result.success(Unit)
             }
+            // STOPPING is observable: the UI shows it while the graceful
+            // teardown (SIGTERM → proot exit → pidfile cleanup) runs.
+            _state.value = VmState.Stopping
             // 1. Graceful: SIGTERM the real QEMU pid (same-uid signal via
             //    the app's process-ownership layer). QEMU flushes and exits.
             if (qemuPid != null) {
@@ -555,7 +576,10 @@ class NoxOsEmulatorManager(
     }
 
     companion object {
-        private const val TAG = "NoxOsEmulator"
+        /** Structured log tags (integration spec §15): NOXS_EMULATOR for
+         *  lifecycle, NOXS_QEMU for the guest process — never credentials. */
+        private const val TAG = "NOXS_EMULATOR"
+        private const val TAG_QEMU = "NOXS_QEMU"
 
         /** qemu-system-aarch64 path inside the Ubuntu rootfs (M1 manifest). */
         const val QEMU_GUEST_PATH: String = "usr/bin/qemu-system-aarch64"
