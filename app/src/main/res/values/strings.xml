@@ -592,6 +592,8 @@
     <string name="emulator_logs">VM logs</string>
     <string name="emulator_logs_title">VM logs (tail)</string>
     <string name="emulator_display">NoxOS display</string>
+    <string name="emulator_fullscreen">Full screen</string>
+    <string name="emulator_fullscreen_exit">Exit full screen</string>
     <string name="emulator_setup_required">The Noxs Linux environment is not set up yet. Open the terminal setup first, then boot NoxOS.</string>
     <string name="emulator_stops_on_exit">Note: the VM keeps running while Noxs is alive; it stops if Android kills the app (background handling arrives in M8).</string>
     <!-- Live setup progress (percent + stage, M2) -->

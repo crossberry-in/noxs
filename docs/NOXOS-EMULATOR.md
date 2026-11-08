@@ -110,3 +110,29 @@ limitations*, *experimental*, or *planned / not implemented* — never
 - Guest RAM: 256/384/512 MiB by `/proc/meminfo` tier (`VmMemoryPolicy`).
 - Display: VNC bound to 127.0.0.1 only, no auth (localhost-only per
   spec), raw encoding, guest framebuffer 720×1280.
+
+## Display transform & gestures (2026-11-08)
+
+The emulator window renders the guest framebuffer through
+`DisplayTransform` (noxs-shared) — ONE pure-Kotlin model consumed by
+both the renderer and the touch pipeline, so the image and the tap
+targets can never diverge:
+
+    scale   = min(viewW/fbW, viewH/fbH) × zoom   (aspect ratio preserved)
+    offsetX = (viewW − fbW×scale)/2 + panX       (same for Y)
+    guest   = ((viewX − offsetX)/scale, …)       (clamped to the framebuffer)
+
+- Fit-center letterboxing at zoom 1×; pinch (host-only) 1×–4×;
+  double-tap resets; one-finger pans while zoomed (a still tap still
+  clicks through to the guest).
+- The VNC pointer is a SINGLE-pointer interface (virtio-tablet): the
+  guest receives one finger. Pinch/pan/double-tap are host-side only —
+  native guest multi-touch is NOT claimed.
+- Full-screen mode (⛶ in the top bar): immersive system bars, top bar
+  and keys row hidden, floating exit chip + system back to leave.
+  Pure UI state — QEMU and VNC are never restarted.
+- Rendering recomputes on every layout change (rotation, keyboard,
+  system bars) and after every VNC (re)connect or guest resize.
+- Structured logs (no credentials): `NOXS_VNC` (connect/resize
+  geometry), `NOXS_RENDERER` (fb/view/scale/zoom/pan/offset state),
+  `NOXS_INPUT` (view→guest pointer transitions).

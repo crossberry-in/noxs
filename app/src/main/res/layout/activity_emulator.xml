@@ -58,6 +58,17 @@
             android:contentDescription="@string/emulator_keyboard" />
 
         <TextView
+            android:id="@+id/btn_vm_fullscreen"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:gravity="center"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:text="⛶"
+            android:textColor="@color/noxs_text_dim"
+            android:textSize="18sp"
+            android:contentDescription="@string/emulator_fullscreen" />
+
+        <TextView
             android:id="@+id/btn_vm_power"
             android:layout_width="36dp"
             android:layout_height="36dp"
@@ -80,7 +91,7 @@
             android:id="@+id/emulator_view"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:scaleType="fitCenter"
+            android:scaleType="matrix"
             android:contentDescription="@string/emulator_display" />
 
         <!-- Status overlay: visible while preparing / installing / booting /
@@ -166,6 +177,23 @@
                 android:textColor="@color/noxs_on_accent"
                 android:visibility="gone" />
         </LinearLayout>
+
+        <!-- Full-screen exit chip: the only visible host control while
+             immersive; back also exits. Never restarts VM/VNC. -->
+        <TextView
+            android:id="@+id/btn_fs_exit"
+            style="@style/Text.Noxs.PillButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="20dp"
+            android:paddingStart="22dp"
+            android:paddingEnd="22dp"
+            android:background="@drawable/bg_pill_accent"
+            android:text="@string/emulator_fullscreen_exit"
+            android:textColor="@color/noxs_on_accent"
+            android:visibility="gone"
+            android:contentDescription="@string/emulator_fullscreen_exit" />
     </FrameLayout>
 
     <!-- C. Extra keys row (guest-facing keys the Android IME lacks) -->
