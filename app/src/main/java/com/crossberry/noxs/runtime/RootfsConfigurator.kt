@@ -99,9 +99,7 @@ object RootfsConfigurator {
         writeFile(File(rootfs, "etc/motd"), motd(banner))
 
         // --- DNS ---
-        if (!File(rootfs, "etc/resolv.conf").isFile || File(rootfs, "etc/resolv.conf").length() == 0L) {
-            writeFile(File(rootfs, "etc/resolv.conf"), DNS)
-        }
+        configureDns(rootfs)
         writeFile(File(rootfs, "etc/hosts"), HOSTS)
         writeFile(File(rootfs, "etc/hostname"), "noxs\n")
 
@@ -671,6 +669,28 @@ object RootfsConfigurator {
                 writeFile(rc, existing.trimEnd() + "\n\n" + bashrcSnippet(hostLabel, banner, hint) + "\n")
             }
         }
+    }
+
+    /**
+     * `/etc/resolv.conf` is Noxs-owned at setup time, like the rest of the
+     * overlay: bootstrap tarballs assembled on cloud CI (GitHub Actions
+     * runners are Azure VMs) can bake the cloud-internal resolver
+     * `168.63.129.16` into it. That address only answers inside the Azure
+     * VNet, so on a phone every DNS lookup hangs and apt never connects
+     * ("0% [Connecting to ...]", then "E: Unable to locate package <x>").
+     * Always replace it with the sandbox defaults (still user-editable in
+     * Settings afterwards).
+     *
+     * Any existing file or symlink is deleted first: ubuntu-base ships
+     * resolv.conf as a symlink to /run/systemd/resolve/stub-resolv.conf,
+     * which is dangling under proot (no systemd) — writeText through a
+     * dangling symlink throws ENOENT, and through a real symlink it would
+     * write OUTSIDE the rootfs.
+     */
+    internal fun configureDns(rootfs: File) {
+        val resolv = File(rootfs, "etc/resolv.conf")
+        if (Files.isSymbolicLink(resolv.toPath()) || resolv.exists()) resolv.delete()
+        writeFile(resolv, DNS)
     }
 
     private fun writeFile(f: File, content: String) {
