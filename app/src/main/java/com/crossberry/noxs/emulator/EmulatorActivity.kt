@@ -15,24 +15,47 @@
 package com.crossberry.noxs.emulator
 
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.os.Bundle
+import android.view.GestureDetector
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.inputmethod.InputMethodManager
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.crossberry.noxs.NoxsApplication
 import com.crossberry.noxs.R
 import com.crossberry.noxs.databinding.ActivityEmulatorBinding
+import com.crossberry.noxs.shared.emulator.DisplayTransform
 import com.crossberry.noxs.shared.emulator.QemuCommand
 import com.crossberry.noxs.shared.emulator.Keysym
+import com.crossberry.noxs.shared.emulator.ReconnectPolicy
+import com.crossberry.noxs.shared.NoxsLog
+import androidx.core.content.ContextCompat
+import kotlin.math.abs
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class EmulatorActivity : AppCompatActivity() {
+
+    private companion object {
+        /** Structured log tags (integration spec §15) — no credentials ever. */
+        private const val LOG_VNC = "NOXS_VNC"
+        private const val LOG_RENDERER = "NOXS_RENDERER"
+        private const val LOG_INPUT = "NOXS_INPUT"
+        private const val LOG_FB = "NOXS_FRAMEBUFFER"
+    }
 
     private lateinit var binding: ActivityEmulatorBinding
 
@@ -45,48 +68,168 @@ class EmulatorActivity : AppCompatActivity() {
     private var stickyCtrl: Boolean = false
     private var latestState: VmState = VmState.Idle
 
-    // ------------------------------------------------------- VNC listener
+    /** VNC bridge connection state (lifecycle spec): CONNECTING →
+     *  HANDSHAKING → RECEIVING_FRAMEBUFFER → LIVE, with bounded
+     *  RECONNECTING between LIVE attempts and FAILED at the end. */
+    private enum class ConnState {
+        IDLE, CONNECTING, HANDSHAKING, RECEIVING_FRAMEBUFFER, LIVE, RECONNECTING, FAILED
+    }
 
-    private val vncListener = object : VncClient.Listener {
-        override fun onConnected(width: Int, height: Int, name: String) {
-            runOnUiThread {
-                fbWidth = width
-                fbHeight = height
-                bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                binding.emulatorView.setImageBitmap(bitmap)
-                binding.emulatorOverlay.visibility = View.GONE
-                binding.emulatorKeysScroll.visibility = View.VISIBLE
+    private var connState: ConnState = ConnState.IDLE
+
+    /** Bounded auto-reconnect ladder; reset on every live connection and
+     *  on a manual retry (integration spec §5 — never retry forever). */
+    private val reconnectPolicy = ReconnectPolicy()
+    private var reconnectJob: Job? = null
+
+    // Single source of truth for render + touch (integration spec §3):
+    // the ImageView consumes the matrix computed here and the touch
+    // pipeline maps coordinates through the same instance.
+    private val transform = DisplayTransform()
+    private var lastTransformLog: String? = null
+    private var lastSentMask: Int = -1
+
+    // Host-side gestures. VNC pointer is a single-pointer interface: the
+    // guest receives ONE finger; pinch/pan/double-tap are host-side only.
+    private lateinit var scaleDetector: ScaleGestureDetector
+    private val doubleTapDetector: GestureDetector by lazy {
+        GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                transform.resetZoom()
+                applyTransform()
+                return true
             }
-        }
+        })
+    }
+    private var touchSlop: Int = 0
+    private var lastTouchX: Float = 0f
+    private var lastTouchY: Float = 0f
+    private var downTouchX: Float = 0f
+    private var downTouchY: Float = 0f
+    private var movedBeyondSlop: Boolean = false
 
-        override fun onResized(width: Int, height: Int) {
-            runOnUiThread {
-                fbWidth = width
-                fbHeight = height
-                bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                binding.emulatorView.setImageBitmap(bitmap)
-            }
-        }
+    // Pure UI state — never touches the VM or the VNC socket.
+    private var isFullscreen: Boolean = false
+    private var keyboardVisible: Boolean = false
 
-        override fun onRect(x: Int, y: Int, w: Int, h: Int, pixels: IntArray) {
-            runOnUiThread {
-                val bmp = bitmap ?: return@runOnUiThread
-                if (x + w > bmp.width || y + h > bmp.height) return@runOnUiThread
-                bmp.setPixels(pixels, 0, w, x, y, w, h)
-                binding.emulatorView.invalidate()
-            }
-        }
+    // ------------------------------------------------- VNC bridge plumbing
 
-        override fun onClosed(error: String?) {
-            runOnUiThread {
-                if (error != null && !isFinishing) {
-                    showOverlay(
-                        getString(R.string.emulator_status_failed),
-                        error
-                    )
-                    binding.emulatorProgress.visibility = View.GONE
-                    binding.btnVmRetry.visibility = View.VISIBLE
+    /**
+     * Starts a fresh VncClient (new socket + new reader thread — a dead
+     * socket is never reused) with a listener bound to THAT instance.
+     * The identity guard makes a stale client's late callbacks harmless:
+     * a manual retry installs a new client before the old reader thread
+     * has finished, and only the CURRENT client may drive the state
+     * machine or null out [vncClient] (prevents duplicate readers).
+     */
+    private fun startVncClient(port: Int) {
+        var self: VncClient? = null
+        val listener = object : VncClient.Listener {
+            private fun isCurrent(): Boolean = vncClient === self
+
+            override fun onConnecting() {
+                runOnUiThread {
+                    if (isCurrent()) setConnState(ConnState.HANDSHAKING)
                 }
+            }
+
+            override fun onConnected(width: Int, height: Int, name: String) {
+                runOnUiThread {
+                    if (!isCurrent()) return@runOnUiThread
+                    handleBridgeConnected(width, height, name)
+                }
+            }
+
+            override fun onResized(width: Int, height: Int) {
+                runOnUiThread {
+                    if (!isCurrent()) return@runOnUiThread
+                    handleFrameResized(width, height)
+                }
+            }
+
+            override fun onRect(x: Int, y: Int, w: Int, h: Int, pixels: IntArray) {
+                runOnUiThread {
+                    if (!isCurrent()) return@runOnUiThread
+                    handleRect(x, y, w, h, pixels)
+                }
+            }
+
+            override fun onClosed(error: String?) {
+                runOnUiThread {
+                    if (!isCurrent()) {
+                        // A newer client owns the bridge; this old reader
+                        // thread's death must not touch the state machine.
+                        NoxsLog.d(LOG_VNC, "stale bridge closed — ignored")
+                        return@runOnUiThread
+                    }
+                    vncClient = null
+                    handleBridgeClosed(error)
+                }
+            }
+        }
+        val client = VncClient("127.0.0.1", port, listener)
+        self = client
+        vncClient = client
+        client.start()
+    }
+
+    private fun handleBridgeConnected(width: Int, height: Int, name: String) {
+        fbWidth = width
+        fbHeight = height
+        bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        binding.emulatorView.setImageBitmap(bitmap)
+        transform.setFramebuffer(width, height)
+        applyTransform()
+        // A live connection resets the bounded reconnect ladder.
+        reconnectPolicy.reset()
+        reconnectJob?.cancel()
+        setConnState(ConnState.RECEIVING_FRAMEBUFFER)
+        NoxsLog.i(LOG_VNC, "connected ${width}x${height} name=$name")
+        NoxsLog.i(LOG_FB, "framebuffer ${width}x${height} taken from ServerInit (no render before this)")
+        binding.emulatorOverlay.visibility = View.GONE
+        binding.btnVmRetry.visibility = View.GONE
+        setKeysVisible(true)
+    }
+
+    private fun handleFrameResized(width: Int, height: Int) {
+        fbWidth = width
+        fbHeight = height
+        bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        binding.emulatorView.setImageBitmap(bitmap)
+        transform.setFramebuffer(width, height)
+        applyTransform()
+        NoxsLog.i(LOG_FB, "framebuffer resized ${width}x${height} — transform recomputed")
+    }
+
+    private fun handleRect(x: Int, y: Int, w: Int, h: Int, pixels: IntArray) {
+        val bmp = bitmap ?: return
+        if (x + w > bmp.width || y + h > bmp.height) return
+        bmp.setPixels(pixels, 0, w, x, y, w, h)
+        if (connState != ConnState.LIVE) {
+            // First pixels after (re)connect — the bridge is LIVE.
+            setConnState(ConnState.LIVE)
+            NoxsLog.i(LOG_FB, "first rect ${w}x${h} at ($x,$y) — bridge LIVE")
+        }
+        binding.emulatorView.invalidate()
+    }
+
+    private fun handleBridgeClosed(error: String?) {
+        when {
+            error == null ->
+                // We closed the bridge ourselves (stop/destroy/retry).
+                setConnState(ConnState.IDLE)
+            latestState is VmState.Running ->
+                // Guest is fine — only the bridge died: bounded automatic
+                // reconnect, then the manual retry button takes over.
+                scheduleReconnect(error)
+            else -> {
+                setConnState(ConnState.FAILED)
+                showOverlay(
+                    getString(R.string.emulator_status_failed),
+                    error
+                )
+                binding.emulatorProgress.visibility = View.GONE
+                binding.btnVmRetry.visibility = View.VISIBLE
             }
         }
     }
@@ -104,6 +247,32 @@ class EmulatorActivity : AppCompatActivity() {
         binding.emulatorView.isFocusable = true
         binding.emulatorView.isFocusableInTouchMode = true
         binding.emulatorView.setOnTouchListener(::onDisplayTouch)
+        touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+        scaleDetector = ScaleGestureDetector(
+            this,
+            object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                override fun onScale(detector: ScaleGestureDetector): Boolean {
+                    transform.addZoom(detector.scaleFactor)
+                    applyTransform()
+                    return true
+                }
+            }
+        )
+        // Any layout change (rotation, keyboard, system bars, fullscreen
+        // toggles) recomputes the letterbox from the ACTUAL view size.
+        binding.emulatorView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            applyTransform()
+        }
+        // Fullscreen back navigation: leave fullscreen first, never kill
+        // the guest session accidentally.
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (isFullscreen) exitFullScreen() else finish()
+                }
+            }
+        )
 
         // AUTO-BOOT: opening this window boots the VM (sidebar entry contract).
         lifecycleScope.launch {
@@ -115,10 +284,16 @@ class EmulatorActivity : AppCompatActivity() {
             }
         }
 
-        binding.btnVmRetry.setOnClickListener { triggerBootIfNeeded() }
+        binding.btnVmRetry.setOnClickListener {
+            // The same button serves two recovery paths: a live VM with a
+            // dead bridge → reconnect the VNC client; anything else → boot.
+            if (latestState is VmState.Running) manualBridgeRetry() else triggerBootIfNeeded()
+        }
         binding.btnVmPower.setOnClickListener { confirmPowerOff() }
         binding.btnVmLogs.setOnClickListener { showVmLogs() }
         binding.btnVmKeyboard.setOnClickListener { toggleKeyboard() }
+        binding.btnVmFullscreen.setOnClickListener { enterFullScreen() }
+        binding.btnFsExit.setOnClickListener { exitFullScreen() }
 
         wireExtraKeys()
     }
@@ -153,18 +328,31 @@ class EmulatorActivity : AppCompatActivity() {
                 showOverlay(getString(R.string.emulator_status_booting), "VNC 127.0.0.1:${QemuCommand.vncPort(state.vncDisplay)}")
                 binding.btnVmRetry.visibility = View.GONE
             }
+            is VmState.StartingQemu -> {
+                showOverlay(getString(R.string.emulator_status_booting), "QEMU starting — VNC 127.0.0.1:${QemuCommand.vncPort(state.vncDisplay)}")
+                binding.btnVmRetry.visibility = View.GONE
+            }
+            is VmState.Stopping -> {
+                showOverlay(getString(R.string.emulator_status_stopping), null)
+                binding.btnVmRetry.visibility = View.GONE
+            }
             is VmState.Running -> {
                 binding.emulatorOverlay.visibility = View.GONE
-                binding.emulatorKeysScroll.visibility = View.VISIBLE
+                setKeysVisible(true)
                 connectIfRunning(QemuCommand.vncPort(state.vncDisplay))
             }
             is VmState.Stopped -> {
+                reconnectJob?.cancel()
                 vncClient?.close(); vncClient = null
+                setConnState(ConnState.IDLE)
                 showOverlay(getString(R.string.emulator_status_stopped), state.detail)
                 binding.btnVmRetry.visibility = View.VISIBLE
             }
             is VmState.Failed -> {
                 vncClient?.close(); vncClient = null
+                // The stale guard swallows the closing client's onClosed,
+                // so the chip must be updated here explicitly.
+                setConnState(ConnState.FAILED)
                 val message = if (state.message.contains("runtime is not ready")) {
                     getString(R.string.emulator_setup_required)
                 } else state.message
@@ -175,7 +363,7 @@ class EmulatorActivity : AppCompatActivity() {
         // Progress bar / percent visibility follows the busy-state only;
         // values arrive via renderSetupProgress.
         val busy = state is VmState.Preparing || state is VmState.InstallingRuntime ||
-            state is VmState.Booting
+            state is VmState.Booting || state is VmState.StartingQemu
         if (!busy) {
             binding.emulatorProgress.visibility = View.GONE
             binding.emulatorPercent.visibility = View.GONE
@@ -198,9 +386,9 @@ class EmulatorActivity : AppCompatActivity() {
 
     /** LIVE setup percent: label + determinate bar driven by the manager. */
     private fun renderSetupProgress(progress: SetupProgress) {
-        val busy = latestState is VmState.Preparing || latestState is VmState.InstallingRuntime ||
-            latestState is VmState.Booting
-        if (!busy || progress.percent <= 0) return
+        val busyProgress = latestState is VmState.Preparing || latestState is VmState.InstallingRuntime ||
+            latestState is VmState.Booting || latestState is VmState.StartingQemu
+        if (!busyProgress || progress.percent <= 0) return
         binding.emulatorProgress.visibility = View.VISIBLE
         binding.emulatorProgress.progress = progress.percent
         binding.emulatorPercent.visibility = View.VISIBLE
@@ -242,35 +430,204 @@ class EmulatorActivity : AppCompatActivity() {
     private fun connectIfRunning(port: Int?) {
         if (port == null || vncClient != null) return
         vncPort = port
-        val client = VncClient("127.0.0.1", port, vncListener)
-        vncClient = client
-        client.start()
+        reconnectJob?.cancel()
+        setConnState(ConnState.CONNECTING)
+        startVncClient(port)
     }
 
     /**
-     * Maps view coordinates to framebuffer coordinates with the fitCenter
-     * math and forwards pointer events (bit 0 = left button). This is the
-     * "view and access" channel: touch reaches the guest through the VNC
-     * pointer → QEMU virtio-tablet path.
+     * Bounded automatic reconnect (integration spec §5): the QEMU guest
+     * keeps running, so a dropped bridge must heal itself — up the policy
+     * ladder (1s/2s/4s/8s/15s, five attempts), then the manual retry
+     * button takes over. A dead socket is never reused: every attempt
+     * builds a fresh VncClient (new socket + new reader thread).
+     */
+    private fun scheduleReconnect(reason: String) {
+        if (!reconnectPolicy.canRetry()) {
+            setConnState(ConnState.FAILED)
+            showOverlay(getString(R.string.emulator_status_failed), reason)
+            binding.emulatorProgress.visibility = View.GONE
+            binding.btnVmRetry.visibility = View.VISIBLE
+            NoxsLog.w(LOG_VNC, "reconnect bound exhausted — manual retry required")
+            return
+        }
+        val delayMs = reconnectPolicy.nextDelayMs()
+        val attempt = reconnectPolicy.attemptsUsed()
+        setConnState(ConnState.RECONNECTING)
+        NoxsLog.w(
+            LOG_VNC,
+            "bridge dropped ($reason) — reconnect $attempt/${ReconnectPolicy.DEFAULT_MAX_ATTEMPTS} in ${delayMs}ms"
+        )
+        reconnectJob?.cancel()
+        reconnectJob = lifecycleScope.launch {
+            delay(delayMs)
+            if (!isFinishing && latestState is VmState.Running && vncClient == null) {
+                connectIfRunning(vncPort)
+            }
+        }
+    }
+
+    /** Manual retry: fresh ladder, fresh client — boot only when the VM
+     *  is genuinely not running (the button is shared with boot retry). */
+    private fun manualBridgeRetry() {
+        reconnectPolicy.reset()
+        reconnectJob?.cancel()
+        vncClient?.close()
+        vncClient = null
+        connectIfRunning(vncPort)
+    }
+
+    /** Single writer for the top-bar connection chip + the NOXS_VNC trail. */
+    private fun setConnState(s: ConnState) {
+        if (connState == s) return
+        connState = s
+        val (label, colorRes): Pair<String, Int> = when (s) {
+            ConnState.IDLE -> "" to R.color.noxs_text_dim
+            ConnState.CONNECTING -> getString(R.string.emulator_conn_connecting) to R.color.noxs_warning
+            ConnState.HANDSHAKING -> getString(R.string.emulator_conn_handshake) to R.color.noxs_warning
+            ConnState.RECEIVING_FRAMEBUFFER -> getString(R.string.emulator_conn_sync) to R.color.noxs_warning
+            ConnState.LIVE -> getString(R.string.emulator_conn_live) to R.color.noxs_accent
+            ConnState.RECONNECTING -> getString(
+                R.string.emulator_conn_reconnect,
+                reconnectPolicy.attemptsUsed(),
+                ReconnectPolicy.DEFAULT_MAX_ATTEMPTS
+            ) to R.color.noxs_warning
+            ConnState.FAILED -> getString(R.string.emulator_conn_failed) to R.color.noxs_error
+        }
+        binding.emulatorConnChip.visibility = if (label.isEmpty()) View.GONE else View.VISIBLE
+        binding.emulatorConnChip.text = label
+        binding.emulatorConnChip.setTextColor(ContextCompat.getColor(this, colorRes))
+        NoxsLog.i(LOG_VNC, "bridge state → $s")
+    }
+
+    /** Keys row visibility, suppressed while in full-screen mode. */
+    private fun setKeysVisible(visible: Boolean) {
+        binding.emulatorKeysScroll.visibility =
+            if (visible && !isFullscreen) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * Pushes the current [DisplayTransform] into the ImageView matrix.
+     * The SAME transform instance maps touch → guest coordinates, so the
+     * rendered image and the tap targets can never diverge.
+     */
+    private fun applyTransform() {
+        if (bitmap == null) return
+        transform.setViewport(binding.emulatorView.width, binding.emulatorView.height)
+        if (!transform.isValid()) return
+        val m = Matrix()
+        val s = transform.scale()
+        m.setScale(s, s)
+        m.postTranslate(transform.offsetX(), transform.offsetY())
+        binding.emulatorView.imageMatrix = m
+        binding.emulatorView.invalidate()
+        val state = transform.describe()
+        if (state != lastTransformLog) {
+            lastTransformLog = state
+            NoxsLog.i(LOG_RENDERER, "transform $state")
+        }
+    }
+
+    /** Maps a view point through [transform] and forwards it as a VNC
+     *  pointer event (bit 0 = left button). Logs only state transitions
+     *  (press/release), not every drag sample. */
+    private fun sendGuestPointer(viewX: Float, viewY: Float, buttonMask: Int) {
+        val guest = transform.toGuest(viewX, viewY) ?: return
+        if (buttonMask != lastSentMask) {
+            NoxsLog.d(
+                LOG_INPUT,
+                "pointer view=(${viewX.toInt()},${viewY.toInt()}) -> " +
+                    "guest=(${guest.first},${guest.second}) mask=$buttonMask"
+            )
+            lastSentMask = buttonMask
+        }
+        vncClient?.sendPointer(guest.first, guest.second, buttonMask)
+    }
+
+    private fun releaseGuestButton() {
+        if (lastSentMask == 1) {
+            lastSentMask = -1
+            vncClient?.sendPointer(lastGuestX, lastGuestY, 0)
+        }
+    }
+
+    private var lastGuestX: Int = 0
+    private var lastGuestY: Int = 0
+
+    /**
+     * Host touch pipeline (integration spec §3/§7):
+     *   zoom = 1 (fit): one finger IS the guest pointer — tap, drag and
+     *     swipe stream press/move/release straight to the guest (the only
+     *     path the single-pointer VNC/virtio-tablet interface supports).
+     *   zoom > 1: one finger pans the viewport; a still tap still clicks
+     *     through; a second finger pinches (host-side zoom only).
+     *   double tap: zoom reset. Multi-touch is NEVER claimed as guest
+     *     input — the guest receives a single pointer, honestly.
      */
     private fun onDisplayTouch(view: View, event: MotionEvent): Boolean {
-        val bmp = bitmap ?: return false
+        scaleDetector.onTouchEvent(event)
+        doubleTapDetector.onTouchEvent(event)
+        if (bitmap == null) return true
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> Unit
+            MotionEvent.ACTION_DOWN -> {
+                lastTouchX = event.x
+                lastTouchY = event.y
+                downTouchX = event.x
+                downTouchY = event.y
+                movedBeyondSlop = false
+                if (!transform.isZoomed()) {
+                    val g = transform.toGuest(event.x, event.y)
+                    if (g != null) {
+                        lastGuestX = g.first
+                        lastGuestY = g.second
+                    }
+                    sendGuestPointer(event.x, event.y, 1)
+                }
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                // Hand control to the pinch; never leave the guest button
+                // pressed across the gesture transition.
+                releaseGuestButton()
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (!movedBeyondSlop &&
+                    (abs(event.x - downTouchX) > touchSlop || abs(event.y - downTouchY) > touchSlop)
+                ) {
+                    movedBeyondSlop = true
+                }
+                if (transform.isZoomed()) {
+                    if (movedBeyondSlop && event.pointerCount == 1) {
+                        transform.panBy(event.x - lastTouchX, event.y - lastTouchY)
+                        applyTransform()
+                    }
+                } else if (movedBeyondSlop) {
+                    val g = transform.toGuest(event.x, event.y)
+                    if (g != null) {
+                        lastGuestX = g.first
+                        lastGuestY = g.second
+                    }
+                    sendGuestPointer(event.x, event.y, 1) // drag with button held
+                }
+            }
+            MotionEvent.ACTION_UP -> {
+                if (transform.isZoomed()) {
+                    // Still tap while zoomed: click through at the point.
+                    if (!movedBeyondSlop) {
+                        sendGuestPointer(event.x, event.y, 1)
+                        sendGuestPointer(event.x, event.y, 0)
+                    }
+                } else {
+                    sendGuestPointer(event.x, event.y, 0)
+                }
+            }
+            MotionEvent.ACTION_CANCEL -> releaseGuestButton()
+            MotionEvent.ACTION_POINTER_UP -> {
+                if (event.pointerCount <= 1) releaseGuestButton()
+            }
             else -> return false
         }
-        val vw = view.width.toFloat()
-        val vh = view.height.toFloat()
-        if (vw <= 0f || vh <= 0f || fbWidth <= 0 || fbHeight <= 0) return false
-        val scale = minOf(vw / fbWidth, vh / fbHeight)
-        val offsetX = (vw - fbWidth * scale) / 2f
-        val offsetY = (vh - fbHeight * scale) / 2f
-        val gx = (((event.x - offsetX) / scale).toInt()).coerceIn(0, fbWidth - 1)
-        val gy = (((event.y - offsetY) / scale).toInt()).coerceIn(0, fbHeight - 1)
-        val button = if (event.actionMasked == MotionEvent.ACTION_UP ||
-            event.actionMasked == MotionEvent.ACTION_CANCEL
-        ) 0 else 1
-        vncClient?.sendPointer(gx, gy, button)
+        lastTouchX = event.x
+        lastTouchY = event.y
         return true
     }
 
@@ -345,7 +702,13 @@ class EmulatorActivity : AppCompatActivity() {
     private fun toggleKeyboard() {
         val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
         binding.emulatorView.requestFocus()
-        imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0)
+        if (keyboardVisible) {
+            imm.hideSoftInputFromWindow(binding.emulatorView.windowToken, 0)
+            keyboardVisible = false
+        } else {
+            imm.showSoftInput(binding.emulatorView, 0)
+            keyboardVisible = true
+        }
     }
 
     /** Extra keys row: guest-facing keys the Android IME does not send. */
@@ -376,6 +739,43 @@ class EmulatorActivity : AppCompatActivity() {
             vncClient?.sendKeyByName(name, true)
             vncClient?.sendKeyByName(name, false)
         }
+    }
+
+    // ---------------------------------------------------------- fullscreen
+
+    /**
+     * Full-screen mode is pure UI state: the QEMU process and the VNC
+     * connection are NEVER touched, so toggling cannot disturb the guest
+     * session (integration spec §6).
+     */
+    private fun enterFullScreen() {
+        if (isFullscreen) return
+        isFullscreen = true
+        binding.emulatorTopBar.visibility = View.GONE
+        setKeysVisible(false)
+        binding.btnFsExit.visibility = View.VISIBLE
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowCompat.getInsetsController(window, binding.emulatorDisplayArea).apply {
+            systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
+        NoxsLog.i(LOG_RENDERER, "fullscreen on")
+        applyTransform()
+    }
+
+    private fun exitFullScreen() {
+        if (!isFullscreen) return
+        isFullscreen = false
+        binding.emulatorTopBar.visibility = View.VISIBLE
+        setKeysVisible(latestState is VmState.Running || latestState is VmState.Booting)
+        binding.btnFsExit.visibility = View.GONE
+        // Back to normal (cutout/status-bar aware) window fitting.
+        WindowCompat.setDecorFitsSystemWindows(window, true)
+        WindowCompat.getInsetsController(window, binding.emulatorDisplayArea)
+            .show(WindowInsetsCompat.Type.systemBars())
+        NoxsLog.i(LOG_RENDERER, "fullscreen off")
+        applyTransform()
     }
 
     // ------------------------------------------------------------ power

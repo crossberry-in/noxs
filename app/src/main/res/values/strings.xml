@@ -592,6 +592,8 @@
     <string name="emulator_logs">VM logs</string>
     <string name="emulator_logs_title">VM logs (tail)</string>
     <string name="emulator_display">NoxOS display</string>
+    <string name="emulator_fullscreen">Full screen</string>
+    <string name="emulator_fullscreen_exit">Exit full screen</string>
     <string name="emulator_setup_required">The Noxs Linux environment is not set up yet. Open the terminal setup first, then boot NoxOS.</string>
     <string name="emulator_stops_on_exit">Note: the VM keeps running while Noxs is alive; it stops if Android kills the app (background handling arrives in M8).</string>
     <!-- Live setup progress (percent + stage, M2) -->
@@ -601,6 +603,15 @@
     <string name="emulator_stage_lists">Refreshing package lists…</string>
     <string name="emulator_stage_download">Downloading packages…</string>
     <string name="emulator_stage_dpkg">Installing packages…</string>
+
+    <!-- VNC bridge connection states (top-bar status chip, lifecycle spec) -->
+    <string name="emulator_conn_connecting">VNC·CONNECT</string>
+    <string name="emulator_conn_handshake">VNC·HANDSHAKE</string>
+    <string name="emulator_conn_sync">VNC·SYNC</string>
+    <string name="emulator_conn_live">VNC·LIVE</string>
+    <string name="emulator_conn_reconnect">VNC·RC %1$d/%2$d</string>
+    <string name="emulator_conn_failed">VNC·ERROR</string>
+    <string name="emulator_status_stopping">Stopping NoxOS VM…</string>
 
     <string name="action_back">‹</string>
     <string name="editor_open_terminal">Open in Terminal</string>
