@@ -350,6 +350,9 @@ class EmulatorActivity : AppCompatActivity() {
             }
             is VmState.Failed -> {
                 vncClient?.close(); vncClient = null
+                // The stale guard swallows the closing client's onClosed,
+                // so the chip must be updated here explicitly.
+                setConnState(ConnState.FAILED)
                 val message = if (state.message.contains("runtime is not ready")) {
                     getString(R.string.emulator_setup_required)
                 } else state.message
