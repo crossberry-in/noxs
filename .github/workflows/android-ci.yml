@@ -56,6 +56,11 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.7'
+          # TEMPORARY: GitHub's Actions cache service is returning 504s
+          # (run 42469356619 failed twice in cache restore before the
+          # build step). Cache is an optimization, not a correctness
+          # requirement — disable until the service recovers, then revert.
+          cache-disabled: true
 
       - name: Provision wrapper if missing
         run: |
@@ -165,6 +170,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.7'
+          # TEMPORARY: GitHub's Actions cache service is returning 504s
+          # (run 42469356619 failed twice in cache restore before the
+          # build step). Cache is an optimization, not a correctness
+          # requirement — disable until the service recovers, then revert.
+          cache-disabled: true
 
       - name: Run security-focused unit tests
         run: |
@@ -287,6 +297,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.7'
+          # TEMPORARY: GitHub's Actions cache service is returning 504s
+          # (run 42469356619 failed twice in cache restore before the
+          # build step). Cache is an optimization, not a correctness
+          # requirement — disable until the service recovers, then revert.
+          cache-disabled: true
 
       - name: Decode signing keystore
         env:

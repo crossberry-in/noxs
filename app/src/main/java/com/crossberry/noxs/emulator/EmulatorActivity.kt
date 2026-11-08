@@ -481,7 +481,9 @@ class EmulatorActivity : AppCompatActivity() {
     private fun setConnState(s: ConnState) {
         if (connState == s) return
         connState = s
-        val (label, colorRes): Pair<String, Int> = when (s) {
+        // Kotlin forbids type annotations on destructuring declarations —
+        // the Pair<String, Int> shape is inferred from the when branches.
+        val (label, colorRes) = when (s) {
             ConnState.IDLE -> "" to R.color.noxs_text_dim
             ConnState.CONNECTING -> getString(R.string.emulator_conn_connecting) to R.color.noxs_warning
             ConnState.HANDSHAKING -> getString(R.string.emulator_conn_handshake) to R.color.noxs_warning
