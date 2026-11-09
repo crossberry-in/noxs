@@ -1,6 +1,6 @@
 # Noxs App Center
 
-Status: first implementation contract
+Status: initial Android screen implemented; build verification pending
 Parent plan: [APP-ECOSYSTEM.md](APP-ECOSYSTEM.md)
 Target: Android host application
 
@@ -53,6 +53,14 @@ Availability must be verified against the current source tree before marking an 
 ## Visual direction
 
 Use the existing Noxs design system rather than introducing a second UI framework. Prefer a calm iOS-inspired surface: rounded cards, restrained translucent surfaces where supported, clear hierarchy, and short transitions. Content and status labels must remain readable at high font scale and under reduced transparency.
+
+## Implementation status
+
+- Added `AppCenterActivity` with a searchable local catalogue and category chips.
+- Registered the activity in the Android manifest and added an App Center row to the terminal drawer.
+- Wired existing destinations for Terminal, File Manager, Code Editor, Plugin Store, NX Package Manager, and Settings.
+- Features without an implemented screen remain visibly marked Planned; the browser stays Planned because it requires a validated URL.
+- Source files were re-fetched from the feature branch after commits. Android compilation, unit tests, lint, and device UI testing have not yet been run.
 
 ## Suggested implementation slices
 
