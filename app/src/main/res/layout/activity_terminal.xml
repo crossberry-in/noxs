@@ -494,6 +494,12 @@
 
                 <!-- Navigation items (uniform 48dp rows) -->
                 <LinearLayout
+                    android:id="@+id/nav_app_center"
+                    style="@style/Text.Noxs.NavRow">
+                    <ImageView style="@style/Text.Noxs.NavIcon" android:src="@drawable/ic_nav_packages" android:contentDescription="App Center" />
+                    <TextView style="@style/Text.Noxs.NavLabel" android:text="App Center" />
+                </LinearLayout>
+                <LinearLayout
                     android:id="@+id/nav_terminal"
                     style="@style/Text.Noxs.NavRow">
                     <ImageView style="@style/Text.Noxs.NavIcon" android:src="@drawable/ic_nav_terminal" android:contentDescription="@string/nav_terminal" />
