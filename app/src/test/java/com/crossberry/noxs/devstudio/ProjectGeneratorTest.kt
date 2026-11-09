@@ -28,8 +28,8 @@ class ProjectGeneratorTest {
         val home = temporary.newFolder("multi-home")
         val generator = ProjectGenerator(home)
 
-        val java = generator.create("JavaDemo", ProjectLanguage.JAVA)
-        assertTrue(java.io.File(java.directory, "src/main/java/Main.java").isFile)
+        val javaProject = generator.create("JavaDemo", ProjectLanguage.JAVA)
+        assertTrue(java.io.File(javaProject.directory, "src/main/java/Main.java").isFile)
 
         val mozhi = generator.create("MozhiDemo", ProjectLanguage.MOZHI)
         assertTrue(java.io.File(mozhi.directory, "src/main.mz").readText().contains("print("))
