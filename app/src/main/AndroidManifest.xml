@@ -49,6 +49,12 @@
             android:label="App Center" />
 
         <activity
+            android:name=".ui.DeveloperStudioActivity"
+            android:exported="false"
+            android:label="Developer Studio"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".ui.TerminalActivity"
             android:exported="false"
             android:label="@string/title_terminal"
