@@ -23,7 +23,7 @@ class ProjectGenerator(private val guestHome: File) {
 
         val target = File(projects, name)
         require(!target.exists()) { "A project named '$name' already exists." }
-        val staging = File(projects, ".$name-\${UUID.randomUUID()}.tmp")
+        val staging = File(projects, ".$name-${UUID.randomUUID()}.tmp")
         try {
             check(staging.mkdir()) { "Could not create a temporary project folder." }
             val template = ProjectTemplates.forLanguage(language, name)
@@ -42,14 +42,14 @@ class ProjectGenerator(private val guestHome: File) {
 
                 Created with Noxs Developer Studio.
 
-                - Language: \${language.title}
-                - Run: \${language.runCommand}
+                - Language: ${language.title}
+                - Run: ${language.runCommand}
 
                 Install the required toolchain in Noxs before building. Project creation does not execute code.
             """.trimIndent() + "\n"
             File(staging, "README.md").writeText(readme, StandardCharsets.UTF_8)
             File(staging, "noxs.project").writeText(
-                "name=$name\nlanguage=\${language.name.lowercase()}\ntemplateVersion=1\n",
+                "name=$name\nlanguage=${language.name.lowercase()}\ntemplateVersion=1\n",
                 StandardCharsets.UTF_8
             )
 
