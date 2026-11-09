@@ -72,7 +72,7 @@ class AppCenterActivity : AppCompatActivity() {
         })
         search = EditText(this).apply {
             hint = "Search apps and tools"
-            singleLine = true
+            setSingleLine(true)
             textSize = 15f
             setTextColor(Color.WHITE)
             setHintTextColor(Color.GRAY)
