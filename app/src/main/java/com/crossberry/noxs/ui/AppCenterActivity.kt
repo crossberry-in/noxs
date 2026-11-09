@@ -29,7 +29,7 @@ class AppCenterActivity : AppCompatActivity() {
             Entry("Terminal", "Linux shell and session workspace", "System", "Available", "›", TerminalActivity::class.java),
             Entry("File Manager", "Browse files inside the Noxs Linux environment", "System", "Available", "▤", FileBrowserActivity::class.java),
             Entry("Code Editor", "Open the Noxs code-server editor", "Developer", "Available", "⌘", EditorActivity::class.java),
-            Entry("Web Browser", "Open the guarded Noxs browser", "Productivity", "Available", "◎", WebWindowActivity::class.java),
+            Entry("Web Browser", "Enter a web address in the guarded Noxs browser", "Productivity", "Planned", "◎"),
             Entry("Plugin Manager", "Browse plugins and manage permissions", "Integrations", "Available", "◇", PluginStoreActivity::class.java),
             Entry("NX Package Manager", "Install and manage verified Linux guest packages", "Developer", "Available", "□", PackageManagerActivity::class.java),
             Entry("Settings", "Configure Noxs and terminal behavior", "System", "Available", "⚙", SettingsActivity::class.java),
