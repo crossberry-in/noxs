@@ -1,6 +1,6 @@
 # Noxs Developer Studio — Project Creator
 
-Status: implementation specification
+Status: first Android implementation committed; CI/device verification pending
 Target: Noxs Android host app + Noxs Linux guest workspace
 
 ## Repository boundary
