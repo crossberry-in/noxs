@@ -44,6 +44,11 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity
+            android:name=".ui.AppCenterActivity"
+            android:exported="false"
+            android:label="App Center" />
+
+        <activity
             android:name=".ui.TerminalActivity"
             android:exported="false"
             android:label="@string/title_terminal"
