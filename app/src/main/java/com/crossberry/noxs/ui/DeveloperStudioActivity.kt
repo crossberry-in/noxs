@@ -68,7 +68,7 @@ class DeveloperStudioActivity : AppCompatActivity() {
         content.addView(sectionTitle("2  ·  PROJECT DETAILS"))
         projectName = EditText(this).apply {
             hint = "Project name (example: HelloNoxs)"
-            singleLine = true
+            setSingleLine(true)
             textSize = 15f
             setTextColor(ink)
             setHintTextColor(muted)
