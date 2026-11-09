@@ -154,7 +154,7 @@ class DeveloperStudioActivity : AppCompatActivity() {
                 AlertDialog.Builder(this@DeveloperStudioActivity)
                     .setTitle("Project created")
                     .setMessage(
-                        "\${project.name} is ready.\n\n\${project.guestPath}\n\nOpen it in the Noxs code editor?"
+                        "${project.name} is ready.\n\n${project.guestPath}\n\nOpen it in the Noxs code editor?"
                     )
                     .setPositiveButton("Open editor") { _, _ ->
                         startActivity(
@@ -182,7 +182,7 @@ class DeveloperStudioActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val tools = withContext(Dispatchers.IO) { ToolchainDetector(paths.rootfs).detect() }
             status.text = tools.joinToString("\n") {
-                "\${if (it.installed) "●" else "○"}  \${it.command}: \${if (it.installed) "detected" else "not found"}"
+                "${if (it.installed) "●" else "○"}  ${it.command}: ${if (it.installed) "detected" else "not found"}"
             } + "\n\nInstall missing tools from the Noxs terminal when needed."
         }
     }
