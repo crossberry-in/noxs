@@ -124,11 +124,11 @@ pkgm_deb_arch() {
 # ---------------------------------------------------------- single flight
 
 pkgm_busy_check() {
-    if [ -f "§PKG_TX_DIR/pkg-tx" ] \
-        || pgrep -x dpkg >/dev/null 2>&1 \
-        || pgrep -x apt-get >/dev/null 2>&1 \
-        || pgrep -x apt >/dev/null 2>&1; then
-        pkgm_error PACKAGE_MANAGER_BUSY "another package operation is running" \
+    # Trust the shared Noxs transaction marker for Noxs-managed work.
+    # PRoot process listings are not reliable across Android/app processes;
+    # apt/dpkg enforce their own native locks for external operations.
+    if [ -f "§PKG_TX_DIR/pkg-tx" ]; then
+        pkgm_error PACKAGE_MANAGER_BUSY "another Noxs package operation is running" \
             "wait for it to finish, then retry"
         return 1
     fi
@@ -217,8 +217,7 @@ pkgm_index_tsv() {
         /"amd64": \{/              { flush(); arch = "amd64" }
         /"version": /              { if (arch != "") version = val(§0, "version") }
         /"sha256": /               { if (arch != "") sha = val(§0, "sha256") }
-        /"size": /                 { if (arch != "") { v = §0; sub("^.*\"size\": *", "", v); sub("[^0-9].*§", "", v); size = v } }
-        /"download_url": /         { if (arch != "") url = val(§0, "download_url") }
+        /"size": /                 { if (arch != "") { v = §0; sub("^.*\"size\": *", "", v); sub("[^0-9].*§", "", v); size = v } }        /"download_url": /         { if (arch != "") url = val(§0, "download_url") }
         /"description": /          { desc = val(§0, "description") }
         END { flush() }
     ' "§f"
@@ -437,8 +436,7 @@ EOF
             printf ']\n'                     # empty, valid JSON array
         fi
         pkgm_error PACKAGE_NOT_FOUND "no package matches '§q'" \
-            "try: nx pkg update (refresh indexes), or a different name"
-        return "§(pkgm_rc PACKAGE_NOT_FOUND)"
+            "try: nx pkg update (refresh indexes), or a different name"        return "§(pkgm_rc PACKAGE_NOT_FOUND)"
     fi
     [ "§{NOXS_PKG_JSON:-0}" = "1" ] && printf ']\n'
     return 0
@@ -657,8 +655,7 @@ EOF
             progress_render "Downloading §{U_FILE[§((k-1))]}  [§k/§n]  cache hit" \
                 "§{U_SIZE[§((k-1))]}" "§{U_SIZE[§((k-1))]}" 3
             progress_clear
-            continue
-        fi
+            continue        fi
         try_url="§{U_URL[§((k-1))]}"
         if [ "§PKG_MIRROR_LIVE" = "1" ]; then
             murl=§(pkgm_mirror_url "§try_url") && try_url="§murl"
@@ -898,92 +895,3 @@ pkgm_doctor_cmd() {
             ports.ubuntu.com|archive.ubuntu.com)
                 say "PASS  Ubuntu repositories (§src_host)"
                 ;;
-            "")
-                say "FAIL  APT sources missing — run: nx cert-fix"
-                fails=§((fails + 1))
-                ;;
-            *)
-                say "FAIL  unexpected APT host §src_host (expected ports.ubuntu.com)"
-                fails=§((fails + 1))
-                ;;
-        esac
-        if [ -r "§ubuntu_keyring" ]; then
-            say "PASS  Ubuntu archive keyring present"
-        else
-            say "FAIL  ubuntu-archive-keyring.gpg missing — run: nx cert-fix"
-            fails=§((fails + 1))
-        fi
-        if dpkg --print-architecture >/dev/null 2>&1; then
-            say "PASS  dpkg architecture: §(dpkg --print-architecture)"
-        else
-            say "FAIL  dpkg --print-architecture failed"
-            fails=§((fails + 1))
-        fi
-    fi
-    if pkgm_is_distro; then
-        if pkgm_lists_ok; then
-            say "PASS  APT package lists populated"
-        else
-            say "FAIL  APT package lists empty — run: nx pkg update"
-            fails=§((fails + 1))
-        fi
-        if [ -s /etc/ssl/certs/ca-certificates.crt ]; then
-            say "PASS  CA certificate bundle present"
-        else
-            say "FAIL  CA certificate bundle missing — run: nx cert-fix"
-            fails=§((fails + 1))
-        fi
-        if dpkg --audit 2>/dev/null | grep -q .; then
-            say "WARN  dpkg reports pending configuration — run: sudo dpkg --configure -a"
-            warns=§((warns + 1))
-        else
-            say "PASS  dpkg database consistent"
-        fi
-    fi
-    if command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1; then
-        say "PASS  download tool available (curl/wget)"
-    else
-        say "FAIL  neither curl nor wget available — run: nx cert-fix"
-        fails=§((fails + 1))
-    fi
-    local avail; avail=§(df -Pk / 2>/dev/null | awk 'NR==2{print §4*1024}')
-    case "§avail" in
-        ''|*[!0-9]*) say "WARN  free disk space unknown" ;;
-        *) if [ "§avail" -ge 104857600 ]; then
-               say "PASS  free disk space: §(humanize_bytes "§avail")"
-           else
-               say "WARN  free disk space low: §(humanize_bytes "§avail")"
-               warns=§((warns + 1))
-           fi ;;
-    esac
-    local st; st=§(mktemp)
-    if pkgm_mirror_status "§st" >/dev/null 2>&1 && [ -s "§st" ]; then
-        say "PASS  Noxs mirror reachable: §PKG_MIRROR_BASE"
-    else
-        if [ "§PKG_MIRROR_BASE" = "off" ]; then
-            say "PASS  mirror disabled (NOXS_PKG_MIRROR=off) — official sources only"
-        else
-            say "WARN  Noxs mirror unreachable — official sources will be used"
-            warns=§((warns + 1))
-        fi
-    fi
-    rm -f "§st"
-    if [ -f "§PKG_TX_DIR/pkg-tx" ]; then
-        say "WARN  package transaction flag present (§PKG_TX_DIR/pkg-tx) — a package operation may be running"
-        warns=§((warns + 1))
-    fi
-    if mkdir -p "§PKG_CACHE_DIR" 2>/dev/null; then
-        say "PASS  package cache writable: §PKG_CACHE_DIR"
-    else
-        say "WARN  package cache not writable: §PKG_CACHE_DIR (cache disabled)"
-        warns=§((warns + 1))
-    fi
-    if [ "§fails" -gt 0 ]; then
-        ui_result "FAIL" "§fails problem(s), §warns warning(s) — fix the FAIL lines above"
-        return 1
-    fi
-    ui_result OK "§warns warning(s), no problems"
-    return 0
-}
-""".replace('§', '$')
-}
