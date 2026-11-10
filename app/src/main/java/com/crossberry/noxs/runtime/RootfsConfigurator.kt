@@ -755,33 +755,20 @@ object RootfsConfigurator {
     // ------------------------------------------------------------ templates
 
     /**
-     * Friendly package-manager serialization for interactive shells.
-     * REAL detection only: the app-side transaction flag (/run/noxs/pkg-tx,
-     * armed by every Noxs-managed apt/dpkg one-shot) plus running package
-     * processes. NEVER deletes or bypasses dpkg lock files.
+     * Do not wrap apt/apt-get in a process/marker pre-check.
+     *
+     * PRoot on Android does not provide a reliable host-style process view,
+     * and the app marker can outlive a crashed/interrupted app operation.
+     * Either condition can falsely block a healthy package manager.
+     *
+     * Let apt/dpkg acquire and enforce their native locks. Noxs-managed
+     * operations are still serialized by NoxsPkgTransaction in the app;
+     * concurrent shell operations receive apt's own lock error if needed.
+     * Never delete or bypass dpkg lock files.
      */
     internal val NOXS_PKG_GUARD_SH = """
-        # /etc/profile.d/noxs-pkg-guard.sh — Noxs package-manager guard
-        noxs_pkg_busy() {
-            [ -f /run/noxs/pkg-tx ] && return 0
-            pgrep -x dpkg >/dev/null 2>&1 && return 0
-            pgrep -x apt-get >/dev/null 2>&1 && return 0
-            pgrep -x apt >/dev/null 2>&1 && return 0
-            return 1
-        }
-        noxs_pkg_busy_msg() {
-            printf '%s\n' 'Noxs package manager is busy.'
-            printf '%s\n' 'Another apt/dpkg operation is currently running.'
-            printf '%s\n' 'Wait for it to finish, then run your command again.'
-        }
-        apt() {
-            if noxs_pkg_busy; then noxs_pkg_busy_msg; return 1; fi
-            command apt "${'$'}@"
-        }
-        apt-get() {
-            if noxs_pkg_busy; then noxs_pkg_busy_msg; return 1; fi
-            command apt-get "${'$'}@"
-        }
+        # /etc/profile.d/noxs-pkg-guard.sh
+        # Intentionally no apt/apt-get wrappers: apt/dpkg own their locks.
     """.trimIndent()
 
     private fun noxsProfile(hostLabel: String): String = """
