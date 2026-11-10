@@ -217,8 +217,7 @@ object RootfsConfigurator {
 
         // --- @noxs/nx-api SDK (Noxs API for NX packages) ---
         val apiDir = File(rootfs, "usr/local/lib/noxs/nx-api")
-        if (!apiDir.isDirectory && !apiDir.mkdirs()) {
-            throw IllegalStateException("Cannot create ${apiDir.absolutePath}")
+        if (!apiDir.isDirectory && !apiDir.mkdirs()) {            throw IllegalStateException("Cannot create ${apiDir.absolutePath}")
         }
         writeFile(File(apiDir, "nx-api.js"), NoxsNxApiTemplate.API_JS)
         writeFile(File(apiDir, "package.json"), NoxsNxApiTemplate.PACKAGE_JSON)
@@ -356,13 +355,13 @@ object RootfsConfigurator {
     //    installs the lib and rewrites the bashrc blocks in existing
     //    environments without a reinstall.
     // 13: nx pkg progress surface (single-line live install output).
-    // 14: pkg-guard repair — the guard template's "$@" was emitted as the
-    //    literal characters \\$@ (Kotlin raw strings keep the backslash), so
-    //    every apt/apt-get call through the guard function fed apt the token
-    //    "$@" ("E: Invalid operation $@"). The fixed template is rewritten
-    //    into existing environments by the migration refresh below.
+    // 14: pkg-guard repair — remove broken literal-$@ forwarding wrappers.
+    // 15: remove the stale process-based apt guard from existing rootfs
+    //     installs. PRoot process visibility can be misleading and leave
+    //     apt blocked after a bootstrap process has exited. Native apt/dpkg
+    //     locks remain the source of truth.
     // internal: asserted from unit tests (NoxsNxAiTest migration marker check)
-    internal val NX_PACKAGE_SYSTEM_VERSION = "14"
+    internal val NX_PACKAGE_SYSTEM_VERSION = "15"
 
     /** Guest lib files removed by a migration version — deleted on update. */
     private val RETIRED_LIB_FILES = listOf("env-lib.sh")
@@ -437,8 +436,7 @@ object RootfsConfigurator {
         val file = File(paths.rootfs, relative)
         if (!Files.isSymbolicLink(file.toPath())) return
         val root = paths.rootfs.canonicalFile.toPath()
-        val target = runCatching { Files.readSymbolicLink(file.toPath()).toString() }.getOrDefault("")
-        val parent = requireNotNull(file.parentFile) { "dpkg state path has no parent: $relative" }
+        val target = runCatching { Files.readSymbolicLink(file.toPath()).toString() }.getOrDefault("")        val parent = requireNotNull(file.parentFile) { "dpkg state path has no parent: $relative" }
         val resolved = if (target.startsWith("/")) {
             // An absolute target can be a host-shaped link created outside the
             // Noxs guest. If a real host file exists at that path and outside
@@ -657,7 +655,6 @@ object RootfsConfigurator {
                 }
             }
         }
-
         val marker = "# --- Noxs interactive shell setup ---"
         listOf(
             File(rootfs, "etc/bash.bashrc"),
@@ -897,116 +894,3 @@ object RootfsConfigurator {
 
         exec "${'$'}SHELL_BIN" --login
     """.trimIndent() + "\n"
-
-    private val NOXS_SUDO_WRAPPER = """
-        #!/bin/sh
-        # Noxs sandbox sudo wrapper (executes inside proot -0 fake-root userspace).
-        unset LD_LIBRARY_PATH
-        export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-        SHELL_MODE=0
-        while [ ${'$'}# -gt 0 ]; do
-            case "${'$'}1" in
-                -i|--login|-s|--shell)
-                    SHELL_MODE=1
-                    shift
-                    ;;
-                -u|--user)
-                    shift 2
-                    ;;
-                -E|-H|-n|-S|-v|-k|-K)
-                    shift
-                    ;;
-                --)
-                    shift
-                    break
-                    ;;
-                -*)
-                    shift
-                    ;;
-                *)
-                    break
-                    ;;
-            esac
-        done
-        export USER="root"
-        export LOGNAME="root"
-        export NOXS_ROOT_LOGIN="1"
-        if [ "${'$'}SHELL_MODE" = "1" ] && [ ${'$'}# -eq 0 ]; then
-            export HOME="/root"
-            cd /root 2>/dev/null || true
-            exec /bin/bash --login
-        fi
-        if [ ${'$'}# -eq 0 ]; then
-            echo "usage: sudo [command ...]" >&2
-            exit 1
-        fi
-        exec "${'$'}@"
-    """.trimIndent() + "\n"
-
-    private val ENVIRONMENT = """
-        NOXS=1
-        LANG=C.UTF-8
-        EDITOR=nano
-    """.trimIndent()
-
-    private val DNS = """
-        # Noxs sandbox DNS (editable in Settings)
-        nameserver 1.1.1.1
-        nameserver 8.8.8.8
-    """.trimIndent()
-
-    private val HOSTS = """
-        127.0.0.1 localhost
-        127.0.1.1 noxs
-        ::1 localhost ip6-localhost
-    """.trimIndent()
-
-    private val APT_CONF = """
-        // Noxs sandbox apt tuning (original file, isolated to the Noxs rootfs)
-        APT::Install-Recommends "false";
-        APT::Get::AllowUnauthenticated "false";
-        Acquire::AllowInsecureRepositories "false";
-        Acquire::AllowDowngradeToInsecureRepositories "false";
-        Acquire::Retries "1";
-        Acquire::http::Timeout "20";
-        Acquire::https::Timeout "20";
-        Acquire::Languages "none";
-        Dir::Cache::archives "/var/cache/apt/archives";
-    """.trimIndent()
-
-    private val HELLO = """
-        #!/bin/sh
-        echo "Noxs ${BuildConfig.VERSION_NAME} — Ubuntu 24.04 LTS userspace inside the Android app sandbox."
-        echo "Security notice: 'sudo' here manages the Noxs environment ONLY."
-        echo "It does not provide Android device root access."
-    """.trimIndent()
-
-    /**
-     * The `noxs` CLI — service manager, socket manager, process view and
-     * code-server integration. Canonical source: linux-runtime/launcher/noxs-cli
-     * (CI diff-checks the asset copy against it).
-     */
-    val NOXS_CLI = NoxsCliTemplate.CLI
-
-    // ------------------------------------------------- multi-environment hooks
-    // Internal (same Gradle module) accessors so the environments package can
-    // reuse the battle-tested primitives with distro-specific parameters
-    // instead of duplicating them. The legacy Debian path is untouched.
-
-    internal fun ensureFhsLink(rootfs: File, name: String, target: String) {
-        ensureSymlink(File(rootfs, name), target)
-    }
-
-    internal fun installNoxsSuSudo(rootfs: File) {
-        installSuAndSudo(rootfs)
-    }
-
-    internal fun ensureNoxsUser(
-        rootfs: File,
-        hostLabel: String = "android",
-        banner: String = "Noxs Ubuntu ${NoxsConstants.DEFAULT_UBUNTU_VERSION_ID} LTS (${NoxsConstants.DEFAULT_UBUNTU_RELEASE})",
-        hint: String = "apt update"
-    ) {
-        ensureNoxsUserAndBashrc(rootfs, hostLabel, banner, hint)
-    }
-}
