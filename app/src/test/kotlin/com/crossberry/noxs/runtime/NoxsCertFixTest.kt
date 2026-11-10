@@ -36,9 +36,9 @@ class NoxsCertFixTest {
     private val cli get() = installed("usr/local/bin/nx").readText()
 
     @Test
-    fun `package system version is 14 - existing installs migrate without a reinstall`() {
-        assertEquals("14", RootfsConfigurator.NX_PACKAGE_SYSTEM_VERSION)
-        assertEquals("14\n", installed("usr/local/share/noxs-pkg/.nx-version").readText())
+    fun `package system version is 15 - existing installs migrate without a reinstall`() {
+        assertEquals("15", RootfsConfigurator.NX_PACKAGE_SYSTEM_VERSION)
+        assertEquals("15\n", installed("usr/local/share/noxs-pkg/.nx-version").readText())
     }
 
     @Test
