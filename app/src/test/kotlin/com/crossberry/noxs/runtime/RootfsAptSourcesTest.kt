@@ -100,19 +100,15 @@ class RootfsAptSourcesTest {
     }
 
     /**
-     * Regression: the guard template once emitted `command apt-get "\$@"`
-     * (backslash kept literally — Kotlin raw strings do not process escapes),
-     * so the shell function passed the literal token `$@` to apt and every
-     * apt call through the guard failed with "E: Invalid operation $@".
-     * The generated script must forward arguments with real double-quote
-     * expansion and must never contain a backslash before `$@`.
+     * PRoot process visibility is not reliable enough for shell-side apt
+     * wrappers. The guest must leave apt/dpkg locking to the native tools.
+     * Existing rootfs installs receive this empty guard through migration.
      */
-    @Test fun `package guard forwards arguments with real shell expansion`() {
+    @Test fun `package guard does not wrap apt or use process based busy checks`() {
         val guard = RootfsConfigurator.NOXS_PKG_GUARD_SH
-        assertFalse("backslash-damage before \$@ must never be generated", guard.contains("\\$@"))
-        assertTrue(guard.contains("command apt \"\$@\""))
-        assertTrue(guard.contains("command apt-get \"\$@\""))
-        // both wrappers still serialize through the busy guard
-        assertEquals(2, Regex("if noxs_pkg_busy").findAll(guard).count())
+        assertFalse(guard.contains("noxs_pkg_busy"))
+        assertFalse(Regex("(?m)^\\s*apt\\s*\\(\\)").containsMatchIn(guard))
+        assertFalse(Regex("(?m)^\\s*apt-get\\s*\\(\\)").containsMatchIn(guard))
+        assertTrue(guard.contains("apt/dpkg own their locks"))
     }
 }
