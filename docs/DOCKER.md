@@ -7,7 +7,7 @@ corresponds to a real probe result inside the Debian 12 userspace.
 
 | Capability | What it is | How Noxs reports it |
 |---|---|---|
-| **Docker CLI** | The `docker` client binary installed inside Debian (`apt install docker.io`) | `docker --version` executed for real |
+| **Docker CLI** | The `docker` client binary installed inside Debian (`apt install docker.io docker-cli`) | `docker --version` executed for real |
 | **Docker Engine** | A live dockerd/containerd backend able to run containers | `docker info` executed for real — success only when the daemon answers |
 
 Both are probed on demand (Diagnostics screen → "docker (live probe)"):
