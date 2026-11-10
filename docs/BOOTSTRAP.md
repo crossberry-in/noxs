@@ -45,10 +45,11 @@ Only ONE apt/dpkg transaction may run at a time:
 
 - App-side: `NoxsPkgTransaction` serializes every Noxs-managed operation
   (setup, background security bootstrap, package screen, Repair).
-- In-shell: `/etc/profile.d/noxs-pkg-guard.sh` wraps `apt`/`apt-get` with a
-  real busy check (Noxs transaction flag in `/run/noxs/pkg-tx` + running
-  dpkg/apt processes) and prints "Noxs package manager is busy." — it never
-  tells the user to delete locks, and locks are never removed by Noxs.
+- In-shell: `apt`/`apt-get` run directly so APT/dpkg enforce their native
+  locks. Noxs does not pre-block shell commands using PRoot process scans or
+  app transaction markers, because those can be stale or incomplete on Android.
+  App-launched package operations remain serialized by `NoxsPkgTransaction`;
+  locks are never removed by Noxs.
 - Interrupted operations: Setup console → **Repair** runs `dpkg --configure -a`
   + authenticated dependency repair + CA re-verification through the signed
   APT bootstrapper, only after the guard confirms nothing else is running.
