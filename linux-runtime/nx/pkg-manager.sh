@@ -81,11 +81,11 @@ pkgm_deb_arch() {
 # ---------------------------------------------------------- single flight
 
 pkgm_busy_check() {
-    if [ -f "$PKG_TX_DIR/pkg-tx" ] \
-        || pgrep -x dpkg >/dev/null 2>&1 \
-        || pgrep -x apt-get >/dev/null 2>&1 \
-        || pgrep -x apt >/dev/null 2>&1; then
-        pkgm_error PACKAGE_MANAGER_BUSY "another package operation is running" \
+    # Trust the shared Noxs transaction marker for Noxs-managed work.
+    # PRoot process listings are not reliable across Android/app processes;
+    # apt/dpkg enforce their own native locks for external operations.
+    if [ -f "$PKG_TX_DIR/pkg-tx" ]; then
+        pkgm_error PACKAGE_MANAGER_BUSY "another Noxs package operation is running" \
             "wait for it to finish, then retry"
         return 1
     fi
@@ -218,7 +218,6 @@ pkgm_cache_put() {
     [ -s "$dst" ] || cp -f "$2" "$dst" 2>/dev/null || return 0
     return 0
 }
-
 # pkgm_fetch URL OUT TOTAL LABEL — streaming download with live single-line
 # progress (tty) or a silent foreground fetch (non-interactive). Two
 # bounded attempts; the second resumes (-C -). Never prints per-chunk logs.
@@ -437,8 +436,7 @@ pkgm_info_cmd() {
     fi
     if [ "${NOXS_PKG_JSON:-0}" = "1" ]; then
         printf '{"name":"%s","source":"%s","version":"%s","installed":"%s","arch":"%s","sha256":"%s","size":%s}\n' \
-            "$name" "$src" "$ver" "$installed" "$arch" "$sha" "${size:-0}"
-        return 0
+            "$name" "$src" "$ver" "$installed" "$arch" "$sha" "${size:-0}"        return 0
     fi
     ui_header "$name" "$src" "$ver" "$arch"
     [ -n "$desc" ] && printf '  %-8s: %s\n' "Summary" "$desc"
@@ -657,8 +655,7 @@ EOF
                 "expected ${U_SHA[$((k-1))]}, got ${actual:-none} — file removed"
             return "$(pkgm_rc CHECKSUM_MISMATCH)"
         fi
-        ui_step "Verifying SHA256  ${U_FILE[$((k-1))]}  [OK]"
-        pkgm_cache_put "${U_SHA[$((k-1))]}" "$dest"
+        ui_step "Verifying SHA256  ${U_FILE[$((k-1))]}  [OK]"        pkgm_cache_put "${U_SHA[$((k-1))]}" "$dest"
     done
 
     # [5/5] install — native apt does the real installation; dpkg database
@@ -898,47 +895,3 @@ pkgm_doctor_cmd() {
         fi
     fi
     if command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1; then
-        say "PASS  download tool available (curl/wget)"
-    else
-        say "FAIL  neither curl nor wget available — run: nx cert-fix"
-        fails=$((fails + 1))
-    fi
-    local avail; avail=$(df -Pk / 2>/dev/null | awk 'NR==2{print $4*1024}')
-    case "$avail" in
-        ''|*[!0-9]*) say "WARN  free disk space unknown" ;;
-        *) if [ "$avail" -ge 104857600 ]; then
-               say "PASS  free disk space: $(humanize_bytes "$avail")"
-           else
-               say "WARN  free disk space low: $(humanize_bytes "$avail")"
-               warns=$((warns + 1))
-           fi ;;
-    esac
-    local st; st=$(mktemp)
-    if pkgm_mirror_status "$st" >/dev/null 2>&1 && [ -s "$st" ]; then
-        say "PASS  Noxs mirror reachable: $PKG_MIRROR_BASE"
-    else
-        if [ "$PKG_MIRROR_BASE" = "off" ]; then
-            say "PASS  mirror disabled (NOXS_PKG_MIRROR=off) — official sources only"
-        else
-            say "WARN  Noxs mirror unreachable — official sources will be used"
-            warns=$((warns + 1))
-        fi
-    fi
-    rm -f "$st"
-    if [ -f "$PKG_TX_DIR/pkg-tx" ]; then
-        say "WARN  package transaction flag present ($PKG_TX_DIR/pkg-tx) — a package operation may be running"
-        warns=$((warns + 1))
-    fi
-    if mkdir -p "$PKG_CACHE_DIR" 2>/dev/null; then
-        say "PASS  package cache writable: $PKG_CACHE_DIR"
-    else
-        say "WARN  package cache not writable: $PKG_CACHE_DIR (cache disabled)"
-        warns=$((warns + 1))
-    fi
-    if [ "$fails" -gt 0 ]; then
-        ui_result "FAIL" "$fails problem(s), $warns warning(s) — fix the FAIL lines above"
-        return 1
-    fi
-    ui_result OK "$warns warning(s), no problems"
-    return 0
-}
