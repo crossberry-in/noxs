@@ -38,7 +38,7 @@ object NoxsDockerProbe {
                 cliAvailable = false,
                 cliVersion = "",
                 engineAvailable = false,
-                engineReason = "Docker CLI is not installed. Install it with: sudo apt install docker.io"
+                engineReason = "Docker CLI is not installed. Install it with: apt install docker-cli"
             )
         }
         return if (infoExit == 0) {
