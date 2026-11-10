@@ -11,7 +11,7 @@ import org.junit.rules.TemporaryFolder
 
 /**
  * `nx pkg` Package Manager invariants: the distro-aware front end must
- * ship with the package system (migration version 14), route every
+ * ship with the package system (migration version 15), route every
  * Debian/Ubuntu install through the NATIVE apt engine with the signed
  * trust chain intact (print-uris hashes verified, never bypassed), use
  * the Noxs mirror only as an accelerator with an official fallback, and
@@ -87,6 +87,8 @@ class NoxsPkgManagerTest {
         assertTrue(pkgManager.contains("PACKAGE_MANAGER_BUSY"))
         assertTrue("lock must be armed and released", pkgManager.contains("pkgm_lock_arm"))
         assertTrue(pkgManager.contains("pkgm_lock_release"))
+        assertTrue("Noxs transaction marker is the single-flight signal", pkgManager.contains('if [ -f "§PKG_TX_DIR/pkg-tx" ]'))
+        assertFalse("PRoot process scans must not block healthy apt operations", pkgManager.contains("pgrep -x"))
     }
 
     @Test
