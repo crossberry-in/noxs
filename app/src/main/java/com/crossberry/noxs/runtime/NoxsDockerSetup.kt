@@ -381,7 +381,7 @@ class NoxsDockerSetup(
             }
             checkCancelled()
             val install = runStreaming(
-                listOf("/usr/bin/apt-get", "install", "--yes", "--no-install-recommends", "docker.io"),
+                listOf("/usr/bin/apt-get", "install", "--yes", "--no-install-recommends", "docker.io", "docker-cli"),
                 600, events
             )
             if (!install.success) {
