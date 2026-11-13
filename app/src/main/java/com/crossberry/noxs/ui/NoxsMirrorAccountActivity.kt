@@ -5,8 +5,6 @@ import android.os.Bundle
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
-import android.view.Gravity
-import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -117,11 +115,6 @@ class NoxsMirrorAccountActivity : AppCompatActivity() {
     private fun buildScreen() {
         val density = resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(24), dp(20), dp(24))
-            setBackgroundColor(0xFF10141B.toInt())
-        }
         val scroll = ScrollView(this)
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         scroll.addView(content)
@@ -202,7 +195,6 @@ class NoxsMirrorAccountActivity : AppCompatActivity() {
         }
         packagesButton.setOnClickListener { loadCloud("cloud/packages") }
         pluginsButton.setOnClickListener { loadCloud("cloud/plugins") }
-        root.addView(scroll)
     }
 
     private fun button(label: String) = Button(this).apply {
