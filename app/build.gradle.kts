@@ -40,6 +40,14 @@ android {
         }
     }
 
+    // Small APK distribution: omit only the prebuilt rootfs asset. The
+    // installer already has a verified HTTPS download fallback, so Lite
+    // installs the same Ubuntu environment on first setup instead of
+    // carrying the ~200 MB offline image inside the APK.
+    if (providers.gradleProperty("noxsLite").orElse("false").get().toBoolean()) {
+        sourceSets.getByName("main").assets.exclude("bootstrap/arm64-v8a/rootfs.bin")
+    }
+
     signingConfigs {
         // Release signing via environment variables (CI). Falls back to debug
         // identity so `assembleRelease` always produces an artifact.
