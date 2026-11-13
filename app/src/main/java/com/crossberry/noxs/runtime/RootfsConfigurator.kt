@@ -172,6 +172,10 @@ object RootfsConfigurator {
         writeFile(nx, NoxsNxTemplate.NX_CLI)
         nx.setExecutable(true, false)
 
+        val nxc = File(rootfs, "usr/local/bin/nxc")
+        writeFile(nxc, NoxsNxCloud.CLI)
+        nxc.setExecutable(true, false)
+
         val libDir = File(rootfs, "usr/local/lib/noxs-pkg")
         if (!libDir.isDirectory && !libDir.mkdirs()) {
             throw IllegalStateException("Cannot create ${libDir.absolutePath}")
