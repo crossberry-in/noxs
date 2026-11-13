@@ -175,4 +175,3 @@ class NoxsPkgManagerTest {
         assertTrue("apt-get preferred when present", pkgManager.indexOf("apt-get") < pkgManager.indexOf("elif command -v apt "))
     }
 }
-}
