@@ -29,7 +29,7 @@
             android:gravity="center_vertical"
             android:paddingStart="4dp"
             android:paddingEnd="4dp"
-            android:background="@color/noxs_panel">
+            android:background="@drawable/bg_noxs_glass_bar">
 
             <TextView
                 android:id="@+id/btn_drawer"
@@ -156,11 +156,13 @@
         <HorizontalScrollView
             android:id="@+id/session_tabs_scroll"
             android:layout_width="match_parent"
-            android:layout_height="38dp"
-            android:paddingTop="4dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="10dp"
+            android:layout_marginEnd="10dp"
+            android:paddingTop="5dp"
             android:paddingBottom="4dp"
             android:scrollbars="none"
-            android:background="@color/noxs_background"
+            android:background="@drawable/bg_noxs_glass_surface"
             android:overScrollMode="never">
 
             <LinearLayout
@@ -182,9 +184,11 @@
         <HorizontalScrollView
             android:id="@+id/actions_scroll"
             android:layout_width="match_parent"
-            android:layout_height="40dp"
+            android:layout_height="50dp"
+            android:layout_marginStart="10dp"
+            android:layout_marginEnd="10dp"
             android:scrollbars="none"
-            android:background="@color/noxs_panel"
+            android:background="@drawable/bg_noxs_glass_bar"
             android:overScrollMode="never">
 
             <LinearLayout
@@ -382,18 +386,21 @@
         <com.crossberry.noxs.terminal.view.NoxsExtraKeysBar
             android:id="@+id/extra_keys"
             android:layout_width="match_parent"
-            android:layout_height="72dp" />
+            android:layout_height="64dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="6dp" />
     </LinearLayout>
 
     <!-- Navigation drawer: flexible scrolling column -->
     <LinearLayout
         android:id="@+id/nav_view"
-        android:layout_width="280dp"
+        android:layout_width="304dp"
         android:layout_height="match_parent"
         android:layout_gravity="start"
         android:fitsSystemWindows="true"
         android:orientation="vertical"
-        android:background="@color/noxs_nav">
+        android:background="@drawable/bg_noxs_drawer_glass">
 
         <ScrollView
             android:layout_width="match_parent"
