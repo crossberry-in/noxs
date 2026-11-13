@@ -1166,7 +1166,7 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                     .alpha(0.88f)
                     .scaleX(1.045f)
                     .scaleY(1.045f)
-                    .translationZ(8f * resources.displayMetrics.density)
+                    .translationZ(8f * this@TerminalActivity.resources.displayMetrics.density)
                     .setDuration(140L)
                     .start()
                 return true
