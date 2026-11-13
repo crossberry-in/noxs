@@ -65,6 +65,8 @@
     <string name="drawer_new_session">New session</string>
     <string name="drawer_new_root_session">New root session (sandbox)</string>
     <string name="drawer_close_session">Close current session</string>
+    <string name="nav_mirror_account">NXMirror Profile</string>
+    <string name="nav_git">NXMirror Git</string>
     <string name="nav_packages">Packages</string>
     <string name="nav_files">Files</string>
     <string name="nav_users">Users</string>
