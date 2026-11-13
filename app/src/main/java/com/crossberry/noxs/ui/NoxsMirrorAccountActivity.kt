@@ -24,7 +24,7 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 
-private object NoxsMirrorSession {
+internal object NoxsMirrorSession {
     private const val PREFS = "noxs_mirror_session"
     private const val ALIAS = "noxs_mirror_access_v1"
     private const val BASE = "https://nxmirror.netlify.app/api"
