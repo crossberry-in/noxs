@@ -85,7 +85,7 @@ pkg_deploy() {
 }
 plugin_init() {
   local id="§{1:-}"
-  [[ "§id" =~ ^[a-z0-9][a-z0-9._-]{1,63}§ ]] || fail "Usage: nxc plugin init <plugin-id>"
+  [[ "§id" =~ ^[a-z0-9][a-z0-9-]{1,63}§ ]] || fail "Usage: nxc plugin init <plugin-id>"
   [ ! -e "§id" ] || fail "Path already exists: §id"
   mkdir -p "§id"
   cat > "§id/plugin.json" <<EOF
@@ -120,7 +120,7 @@ plugin_deploy() {
   cd "§dir"; [ -f plugin.json ] || fail "plugin.json is missing"
   id="§(python3 -c 'import json;print(json.load(open("plugin.json"))["id"])')"
   version="§(python3 -c 'import json;print(json.load(open("plugin.json"))["version"])')"
-  [[ "§id" =~ ^[a-z0-9][a-z0-9._-]{1,63}§ ]] || fail "Invalid plugin id"
+  [[ "§id" =~ ^[a-z0-9][a-z0-9-]{1,63}§ ]] || fail "Invalid plugin id"
   [[ "§version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][A-Za-z0-9.-]+)?§ ]] || fail "Invalid plugin version"
   mkdir -p dist
   artifact="dist/§id-§version.noxs-plugin"
