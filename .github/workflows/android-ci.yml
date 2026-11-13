@@ -348,11 +348,11 @@ jobs:
             -PnoxsVersionName="$RELEASE_VERSION" \
             -PnoxsVersionCode="$RELEASE_VERSION_CODE"
           mkdir -p release-assets
-          cp app/build/outputs/apk/release/app-release.apk "release-assets/noxs-\${RELEASE_VERSION}-full.apk"
+          cp app/build/outputs/apk/release/app-release.apk "release-assets/noxs-${RELEASE_VERSION}-full.apk"
           ./gradlew assembleRelease --stacktrace -PnoxsLite=true \
             -PnoxsVersionName="$RELEASE_VERSION" \
             -PnoxsVersionCode="$RELEASE_VERSION_CODE"
-          cp app/build/outputs/apk/release/app-release.apk "release-assets/noxs-\${RELEASE_VERSION}-lite.apk"
+          cp app/build/outputs/apk/release/app-release.apk "release-assets/noxs-${RELEASE_VERSION}-lite.apk"
 
       - name: Verify package ID and stage versioned APK
         env:
