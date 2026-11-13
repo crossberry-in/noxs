@@ -89,6 +89,25 @@ git commit -m "release: tree 1.0.0"
 git push
 ```
 
+### Publish to NXMirror Cloud
+
+Sign in once from the Noxs terminal:
+
+```bash
+nxc register                 # create account
+nxc login                    # later logins
+nxc whoami                   # verify the account
+nx pkg deploy                # build + upload the current package
+nxc packages                 # list your cloud packages
+nxc logout
+```
+
+Cloud package versions are immutable and store the artifact URL, byte size and
+SHA-256 digest in the user's NXMirror library. Direct CLI uploads are currently
+limited to **4 MiB per artifact** by the Netlify request limit; larger package
+publishing needs a remote/chunked upload path. The package artifact is uploaded
+to the account's AnonDrop storage, not committed into the Noxs source repository.
+
 GitHub Actions then runs `pkg.yml`:
 
 ```
