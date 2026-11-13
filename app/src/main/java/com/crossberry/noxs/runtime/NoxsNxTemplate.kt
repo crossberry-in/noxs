@@ -280,6 +280,7 @@ case "§{1:-}" in
     git)
         shift
         # NXMirror Git Cloud web interface.
+        # shellcheck source=/dev/null
         . "§NX_LIB_DIR/web-lib.sh"
         nx_ow_cmd "https://nxmirror.netlify.app/"
         ;;
