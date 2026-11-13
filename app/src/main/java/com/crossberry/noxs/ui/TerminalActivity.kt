@@ -75,6 +75,8 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
     private var storageObserver: FileObserver? = null
     private var storageObservedPath: String? = null
     private var pendingStorageAction: PendingStorageAction? = null
+    /** User-defined order for session chips; labels are unique per session. */
+    private val sessionDisplayOrder = mutableListOf<String>()
 
     private data class PendingStorageAction(
         val requestId: String,
@@ -970,8 +972,14 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
         row.removeAllViews()
         val dp = getResources().displayMetrics.density
 
+        // Keep the user's custom order while removing sessions that no longer exist.
+        val liveLabels = list.map { it.label }.toSet()
+        sessionDisplayOrder.removeAll { it !in liveLabels }
+        list.forEach { if (it.label !in sessionDisplayOrder) sessionDisplayOrder.add(it.label) }
+        val orderedSessions = list.sortedBy { sessionDisplayOrder.indexOf(it.label) }
+
         // Session chips: root sandbox sessions carry a warning outline + ⌗.
-        list.forEach { entry ->
+        orderedSessions.forEach { entry ->
             val isSelected = entry === current
             val running = entry.session.isRunning
             val chip = TextView(this).apply {
@@ -1087,7 +1095,9 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
     private fun showSessionActionsMenu(anchor: View, entry: NoxsSessionManager.Entry) {
         val popup = PopupMenu(this, anchor)
         popup.menu.add(0, 1, 0, "Switch to session")
-        popup.menu.add(0, 2, 1, "Close session")
+        popup.menu.add(0, 3, 1, "Move left")
+        popup.menu.add(0, 4, 2, "Move right")
+        popup.menu.add(0, 2, 3, "Close session")
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> {
@@ -1096,10 +1106,24 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                     binding.drawer.closeDrawer(GravityCompat.START)
                 }
                 2 -> confirmCloseSession(entry)
+                3 -> moveSession(entry, -1)
+                4 -> moveSession(entry, 1)
             }
             true
         }
         popup.show()
+    }
+
+    /** Reorders the visible session strip without changing runtime session state. */
+    private fun moveSession(entry: NoxsSessionManager.Entry, direction: Int) {
+        val from = sessionDisplayOrder.indexOf(entry.label)
+        val to = (from + direction).coerceIn(0, sessionDisplayOrder.lastIndex)
+        if (from < 0 || from == to) return
+        val moved = sessionDisplayOrder.removeAt(from)
+        sessionDisplayOrder.add(to, moved)
+        renderSessionTabs(RuntimeHolder.sessions?.sessions?.value ?: return)
+        val row = binding.sessionTabsRow
+        row.getChildAt(to)?.let { binding.sessionTabsScroll.smoothScrollTo(it.left.coerceAtLeast(0), 0) }
     }
 
     /** [+] overflow: shell and root sandbox creation on any screen width. */
