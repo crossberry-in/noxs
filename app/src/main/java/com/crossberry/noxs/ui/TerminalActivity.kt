@@ -12,6 +12,9 @@ import android.content.Intent
 import android.net.Uri
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
+import android.content.res.ColorStateList
+import android.view.MotionEvent
 import android.os.Bundle
 import android.os.FileObserver
 import android.text.Editable
@@ -989,8 +992,11 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                         else -> TEXT_WHITE
                     }
                 )
-                background = GradientDrawable().apply {
-                    cornerRadius = 8f * dp
+                minHeight = (48 * dp).toInt()
+                isFocusable = true
+                isClickable = true
+                val chipShape = GradientDrawable().apply {
+                    cornerRadius = 16f * dp
                     setColor(if (isSelected) ACCENT else ELEVATED)
                     setStroke(
                         (1 * dp).toInt(),
@@ -1001,7 +1007,32 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                         }
                     )
                 }
-                setPadding((10 * dp).toInt(), (4 * dp).toInt(), (10 * dp).toInt(), (4 * dp).toInt())
+                val chipMask = GradientDrawable().apply {
+                    cornerRadius = 16f * dp
+                    setColor(0xFFFFFFFF.toInt())
+                }
+                background = RippleDrawable(
+                    ColorStateList.valueOf(0x44FFFFFF),
+                    chipShape,
+                    chipMask
+                )
+                setPadding((14 * dp).toInt(), (8 * dp).toInt(), (14 * dp).toInt(), (8 * dp).toInt())
+                tooltipText = entry.label + " · Long press for session actions"
+                setOnHoverListener { view, event ->
+                    when (event.action) {
+                        MotionEvent.ACTION_HOVER_ENTER -> view.animate().scaleX(1.025f).scaleY(1.025f).setDuration(120L).start()
+                        MotionEvent.ACTION_HOVER_EXIT -> view.animate().scaleX(1f).scaleY(1f).setDuration(120L).start()
+                    }
+                    false
+                }
+                setOnTouchListener { view, event ->
+                    when (event.action) {
+                        MotionEvent.ACTION_DOWN -> view.animate().scaleX(0.97f).scaleY(0.97f).setDuration(80L).start()
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
+                            view.animate().scaleX(1f).scaleY(1f).setDuration(140L).start()
+                    }
+                    false
+                }
                 setOnClickListener {
                     if (current !== entry) {
                         current = entry
@@ -1009,7 +1040,11 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                         renderSessionTabs(list)
                     }
                 }
-                setOnLongClickListener { confirmCloseSession(entry); true }
+                setOnLongClickListener {
+                    performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                    showSessionActionsMenu(this, entry)
+                    true
+                }
             }
             row.addView(chip, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -1046,6 +1081,25 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
             val target = if (index >= 0) row.getChildAt(index) else add
             target?.let { binding.sessionTabsScroll.smoothScrollTo(it.left.coerceAtLeast(0), 0) }
         }
+    }
+
+    /** Context actions for a terminal session, exposed on long press. */
+    private fun showSessionActionsMenu(anchor: View, entry: NoxsSessionManager.Entry) {
+        val popup = PopupMenu(this, anchor)
+        popup.menu.add(0, 1, 0, "Switch to session")
+        popup.menu.add(0, 2, 1, "Close session")
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> {
+                    current = entry
+                    attachCurrent()
+                    binding.drawer.closeDrawer(GravityCompat.START)
+                }
+                2 -> confirmCloseSession(entry)
+            }
+            true
+        }
+        popup.show()
     }
 
     /** [+] overflow: shell and root sandbox creation on any screen width. */
