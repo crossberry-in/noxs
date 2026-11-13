@@ -1148,19 +1148,35 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
 
     /** Handles drag targets on chips and the session strip; runtime sessions are never moved. */
     private fun handleSessionDragEvent(target: View, event: android.view.DragEvent): Boolean {
+        fun resetTarget() {
+            target.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .translationZ(0f)
+                .setDuration(120L)
+                .start()
+        }
+
         when (event.action) {
             android.view.DragEvent.ACTION_DRAG_STARTED ->
                 return event.clipDescription?.hasMimeType("text/plain") == true
             android.view.DragEvent.ACTION_DRAG_ENTERED -> {
-                target.animate().alpha(0.72f).setDuration(90L).start()
+                target.animate()
+                    .alpha(0.88f)
+                    .scaleX(1.045f)
+                    .scaleY(1.045f)
+                    .translationZ(8f * resources.displayMetrics.density)
+                    .setDuration(140L)
+                    .start()
                 return true
             }
             android.view.DragEvent.ACTION_DRAG_EXITED -> {
-                target.animate().alpha(1f).setDuration(90L).start()
+                resetTarget()
                 return true
             }
             android.view.DragEvent.ACTION_DROP -> {
-                target.alpha = 1f
+                resetTarget()
                 val source = event.localState as? NoxsSessionManager.Entry ?: return false
                 val from = sessionDisplayOrder.indexOf(source.label)
                 val destination = (target.tag as? NoxsSessionManager.Entry)?.let { sessionDisplayOrder.indexOf(it.label) } ?: sessionDisplayOrder.lastIndex
@@ -1173,7 +1189,7 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                 return true
             }
             android.view.DragEvent.ACTION_DRAG_ENDED -> {
-                target.animate().alpha(1f).setDuration(90L).start()
+                resetTarget()
                 return true
             }
         }
