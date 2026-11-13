@@ -983,6 +983,7 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
             val isSelected = entry === current
             val running = entry.session.isRunning
             val chip = TextView(this).apply {
+                tag = entry
                 val dot = if (running) "● " else "○ "
                 val rootTag = if (entry.loginAsRoot) " ⌗" else ""
                 text = "$dot${entry.label}$rootTag"
@@ -1048,6 +1049,7 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                         renderSessionTabs(list)
                     }
                 }
+                setOnDragListener { target, event -> handleSessionDragEvent(target, event) }
                 setOnLongClickListener {
                     performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
                     showSessionActionsMenu(this, entry)
@@ -1083,6 +1085,8 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
             LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { marginEnd = (6 * dp).toInt() })
 
+        row.setOnDragListener { target, event -> handleSessionDragEvent(target, event) }
+
         // Keep the active chip in view after switching or creating sessions.
         binding.sessionTabsScroll.post {
             val index = list.indexOfFirst { it === current }
@@ -1095,9 +1099,10 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
     private fun showSessionActionsMenu(anchor: View, entry: NoxsSessionManager.Entry) {
         val popup = PopupMenu(this, anchor)
         popup.menu.add(0, 1, 0, "Switch to session")
-        popup.menu.add(0, 3, 1, "Move left")
-        popup.menu.add(0, 4, 2, "Move right")
-        popup.menu.add(0, 2, 3, "Close session")
+        popup.menu.add(0, 5, 1, "Drag to reorder")
+        popup.menu.add(0, 3, 2, "Move left")
+        popup.menu.add(0, 4, 3, "Move right")
+        popup.menu.add(0, 2, 4, "Close session")
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> {
@@ -1106,12 +1111,53 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                     binding.drawer.closeDrawer(GravityCompat.START)
                 }
                 2 -> confirmCloseSession(entry)
+                5 -> startSessionDrag(anchor, entry)
                 3 -> moveSession(entry, -1)
                 4 -> moveSession(entry, 1)
             }
             true
         }
         popup.show()
+    }
+
+    /** Starts a native Android drag operation for a terminal session tab. */
+    private fun startSessionDrag(anchor: View, entry: NoxsSessionManager.Entry) {
+        val clip = android.content.ClipData.newPlainText("noxs-session", entry.label)
+        anchor.startDragAndDrop(clip, View.DragShadowBuilder(anchor), entry, 0)
+    }
+
+    /** Handles drag targets on chips and the session strip; runtime sessions are never moved. */
+    private fun handleSessionDragEvent(target: View, event: android.view.DragEvent): Boolean {
+        when (event.action) {
+            android.view.DragEvent.ACTION_DRAG_STARTED ->
+                return event.clipDescription?.hasMimeType("text/plain") == true
+            android.view.DragEvent.ACTION_DRAG_ENTERED -> {
+                target.animate().alpha(0.72f).setDuration(90L).start()
+                return true
+            }
+            android.view.DragEvent.ACTION_DRAG_EXITED -> {
+                target.animate().alpha(1f).setDuration(90L).start()
+                return true
+            }
+            android.view.DragEvent.ACTION_DROP -> {
+                target.alpha = 1f
+                val source = event.localState as? NoxsSessionManager.Entry ?: return false
+                val from = sessionDisplayOrder.indexOf(source.label)
+                val destination = (target.tag as? NoxsSessionManager.Entry)?.let { sessionDisplayOrder.indexOf(it.label) } ?: sessionDisplayOrder.lastIndex
+                if (from >= 0 && destination >= 0 && from != destination) {
+                    val moved = sessionDisplayOrder.removeAt(from)
+                    sessionDisplayOrder.add(destination.coerceIn(0, sessionDisplayOrder.size), moved)
+                    RuntimeHolder.sessions?.sessions?.value?.let(::renderSessionTabs)
+                }
+                performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                return true
+            }
+            android.view.DragEvent.ACTION_DRAG_ENDED -> {
+                target.animate().alpha(1f).setDuration(90L).start()
+                return true
+            }
+        }
+        return true
     }
 
     /** Reorders the visible session strip without changing runtime session state. */
