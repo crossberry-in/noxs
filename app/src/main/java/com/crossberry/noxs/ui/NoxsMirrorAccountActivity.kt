@@ -142,7 +142,7 @@ class NoxsMirrorAccountActivity : AppCompatActivity() {
 
         username = EditText(this).apply {
             hint = "Username"
-            singleLine = true
+            setSingleLine(true)
             setTextColor(0xFFF3F6FA.toInt())
             setHintTextColor(0xFF8995A5.toInt())
             setPadding(dp(14), dp(12), dp(14), dp(12))
@@ -150,7 +150,7 @@ class NoxsMirrorAccountActivity : AppCompatActivity() {
         }
         password = EditText(this).apply {
             hint = "Password"
-            singleLine = true
+            setSingleLine(true)
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
             setTextColor(0xFFF3F6FA.toInt())
             setHintTextColor(0xFF8995A5.toInt())
