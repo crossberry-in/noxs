@@ -44,6 +44,13 @@ docker run --rm --platform linux/arm64 \
             tar gzip xz-utils zstd
         apt-get clean
         rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
+        # Keep the runtime toolchain, but remove non-runtime documentation,
+        # translations and generated Python bytecode from the offline image.
+        rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* \
+            /usr/share/lintian/* /var/cache/man/*
+        find /usr/share/locale -mindepth 1 -maxdepth 1 \
+            ! -name en ! -name en_US -exec rm -rf {} + 2>/dev/null || true
+        find /usr/lib/python3 -type f -name '*.pyc' -delete 2>/dev/null || true
         mkdir -p /home/noxs /run /tmp /dev /proc /sys
         chmod 1777 /tmp
         # proc/sysfs/devtmpfs mutate while being read, so tar must never walk
