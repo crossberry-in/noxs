@@ -116,7 +116,10 @@ plugin_deploy() {
   [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][A-Za-z0-9.-]+)?$ ]] || fail "Invalid plugin version"
   mkdir -p dist
   artifact="dist/$id-$version.noxs-plugin"
-  tar -czf "$artifact" -- plugin.json plugin.js README.md
+  local files=(plugin.json plugin.js README.md)
+  [ -f icon.svg ] && files+=(icon.svg)
+  [ -d bin ] && files+=(bin)
+  tar -czf "$artifact" -- "${files[@]}"
   publish_file plugin "$id" "$version" "$artifact"
 }
 usage() {
