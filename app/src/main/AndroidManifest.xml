@@ -149,6 +149,10 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity
+            android:name=".ui.NoxsMirrorAccountActivity"
+            android:exported="false"
+            android:label="NXMirror Account" />
+        <activity
             android:name=".ui.PluginStoreActivity"
             android:exported="false"
             android:label="@string/plugin_store_title"
