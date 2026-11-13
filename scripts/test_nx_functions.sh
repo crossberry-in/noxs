@@ -29,7 +29,8 @@ root = pathlib.Path(sys.argv[1])
 dest = pathlib.Path(sys.argv[2])
 (dest / 'noxs-pkg').mkdir(parents=True, exist_ok=True)
 for name, content, mirror in extract_nx.nx_shell_scripts(root):
-    module = {'NX_CLI': 'bin/nx', 'PKG_LIB': 'noxs-pkg/pkg-lib.sh',
+    module = {'NX_CLI': 'bin/nx', 'CLOUD_CLI': 'launcher/nxc',
+              'PKG_LIB': 'noxs-pkg/pkg-lib.sh',
               'PKG_INIT': 'noxs-pkg/pkg-init.sh', 'PKG_DEV': 'noxs-pkg/pkg-dev.sh',
               'PKG_INSTALL': 'noxs-pkg/pkg-install.sh', 'WEB_LIB': 'noxs-pkg/web-lib.sh',
               'VPN_LIB': 'noxs-pkg/vpn-lib.sh',

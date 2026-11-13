@@ -20,7 +20,7 @@ object NoxsNxTemplate {
 #   nx pkg init <name> [--node|--rust|--cpp|--python|--go]
 #   nx pkg build
 #   nx pkg release
-  nx pkg deploy         Build and publish this package to NXMirror
+#   nx pkg deploy        Build and publish this package to NXMirror
 #   nx pkg info <name>
 #   nx pkg search <name>       Search: cache -> Noxs API -> distro -> registry
 #   nx pkg install <name>      Branded installer w/ live single-line progress
@@ -39,8 +39,8 @@ object NoxsNxTemplate {
 #   nx vpn <cmd>         Tor over PRoot (VPN mode)
 #   nx plug <cmd>        Noxs Plugin Store (open / search / install / ...)
 #   nx cert-fix          Repair APT sources, CA certificates, install curl/wget
-  nx git               Open NXMirror Git Cloud
-  nx whoami            Show the signed-in NXMirror account
+#   nx git               Open NXMirror Git Cloud
+#   nx whoami            Show the signed-in NXMirror account
 #
 # Every other command is forwarded to the noxs CLI, so all noxs commands
 # are allowed through nx as well:

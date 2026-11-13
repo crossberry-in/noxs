@@ -94,7 +94,7 @@ fi
 # ---- shell tooling --------------------------------------------------------
 if [ "$MODE" = "--all" ] || [ "$MODE" = "--scripts" ]; then
     step "shell checks"
-    SHELLS="$(ls scripts/*.sh linux-runtime/launcher/noxs-launch.sh linux-runtime/launcher/noxs-cli linux-runtime/launcher/noxs-setup-storage linux-runtime/launcher/nx linux-runtime/nx/*.sh linux-runtime/service-manager/noxs-service linux-runtime/socket-manager/noxs-socket linux-runtime/process-manager/noxs-ps nx-installer/*.sh 2>/dev/null)"
+    SHELLS="$(ls scripts/*.sh linux-runtime/launcher/noxs-launch.sh linux-runtime/launcher/noxs-cli linux-runtime/launcher/noxs-setup-storage linux-runtime/launcher/nx linux-runtime/launcher/nxc linux-runtime/nx/*.sh linux-runtime/service-manager/noxs-service linux-runtime/socket-manager/noxs-socket linux-runtime/process-manager/noxs-ps nx-installer/*.sh 2>/dev/null)"
     for f in $SHELLS; do
         bash -n "$f" || fail "syntax: $f"
     done
