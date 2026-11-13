@@ -1062,7 +1062,7 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                 setOnDragListener { target, event -> handleSessionDragEvent(target, event) }
                 setOnLongClickListener {
                     performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                    showSessionActionsMenu(this, entry)
+                    startSessionDrag(this, entry)
                     true
                 }
             }
