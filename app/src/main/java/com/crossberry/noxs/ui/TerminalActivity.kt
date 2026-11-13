@@ -1029,10 +1029,20 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                 androidx.appcompat.widget.TooltipCompat.setTooltipText(this, entry.label + " · Long press for session actions")
                 setOnHoverListener { view, event ->
                     when (event.action) {
-                        MotionEvent.ACTION_HOVER_ENTER -> view.animate().scaleX(1.025f).scaleY(1.025f).setDuration(120L).start()
-                        MotionEvent.ACTION_HOVER_EXIT -> view.animate().scaleX(1f).scaleY(1f).setDuration(120L).start()
+                        MotionEvent.ACTION_HOVER_ENTER -> {
+                            view.animate().scaleX(1.025f).scaleY(1.025f).translationZ(6f * dp).setDuration(120L).start()
+                            view.pointerIcon = android.view.PointerIcon.getSystemIcon(this@TerminalActivity, android.view.PointerIcon.TYPE_HAND)
+                        }
+                        MotionEvent.ACTION_HOVER_EXIT -> {
+                            view.animate().scaleX(1f).scaleY(1f).translationZ(0f).setDuration(120L).start()
+                            view.pointerIcon = android.view.PointerIcon.getSystemIcon(this@TerminalActivity, android.view.PointerIcon.TYPE_ARROW)
+                        }
                     }
                     false
+                }
+                setOnContextClickListener {
+                    showSessionActionsMenu(this, entry)
+                    true
                 }
                 setOnTouchListener { view, event ->
                     when (event.action) {
