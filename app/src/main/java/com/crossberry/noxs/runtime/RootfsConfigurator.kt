@@ -366,7 +366,7 @@ object RootfsConfigurator {
     //    "$@" ("E: Invalid operation $@"). The fixed template is rewritten
     //    into existing environments by the migration refresh below.
     // internal: asserted from unit tests (NoxsNxAiTest migration marker check)
-    internal val NX_PACKAGE_SYSTEM_VERSION = "15"
+    internal val NX_PACKAGE_SYSTEM_VERSION = "16"
 
     /** Guest lib files removed by a migration version — deleted on update. */
     private val RETIRED_LIB_FILES = listOf("env-lib.sh")
