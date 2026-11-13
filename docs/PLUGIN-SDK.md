@@ -45,6 +45,25 @@ nothing else in the app hardcodes SDK versions.
 4. The SDK attaches `noxs.sdk` (documented, permission-checked calls)
    onto the existing `noxs` global — there is no second API surface.
 
+## NXMirror cloud publishing
+
+Create a plugin scaffold and publish its versioned archive from a Noxs terminal:
+
+```bash
+nxc register
+nxc plugin init hello-plugin
+cd hello-plugin
+# edit plugin.js and plugin.json
+nxc plugin deploy
+nxc plugins
+```
+
+The cloud library stores the immutable plugin artifact URL and SHA-256 digest
+under the signed-in account. Direct CLI artifact uploads are currently capped
+at 4 MiB. Cloud publishing does not automatically add a private plugin to the
+public Plugin Store registry; public-store distribution still uses the
+noxs-plugins registry workflow.
+
 ## Store integration
 
 Every store card and the `nx plug` CLI snapshots carry a compatibility
