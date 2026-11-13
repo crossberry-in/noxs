@@ -630,13 +630,6 @@ class PluginDetailsActivity : AppCompatActivity() {
         }
     }
 
-    private fun metaLine(label: String, value: String?): TextView = TextView(this).apply {
-        text = "$label  ${value?.takeIf { it.isNotBlank() } ?: "-"}"
-        setTextColor(0xFF9AA7B4.toInt())
-        textSize = 13f
-        setPadding(0, (2 * dp).toInt(), 0, (2 * dp).toInt())
-    }
-
     // ---------------------------------------------------------------- logo
 
     /**

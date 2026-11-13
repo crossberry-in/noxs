@@ -145,7 +145,9 @@ class NoxsPluginCloudCatalog(
         // wins, otherwise the newest publish (public catalogs may carry the
         // same name from several accounts).
         val merged = fetched.groupBy { it.name }.map { (_, group) ->
-            group.maxByOrNull { (it.visibility == "private") to (it.publishedAt ?: "") }!!
+            group.maxWithOrNull(
+                compareBy({ it.visibility == "private" }, { it.publishedAt ?: "" })
+            )!!
         }
         cacheDir.mkdirs()
         val text = serializeItems(merged)
@@ -357,7 +359,7 @@ class NoxsPluginCloudCatalog(
     private fun cacheArtifactExtras(cloud: CloudItem, meta: PluginMeta, bytes: ByteArray) {
         runCatching {
             val readme = extractEntryText(bytes, meta.readme?.takeIf { it.isNotBlank() } ?: "README.md", MAX_README_BYTES)
-            val icon = extractEntryText(bytes, "icon.svg", MAX_ICON_BYTES)
+            val icon = extractEntryBytes(bytes, "icon.svg", MAX_ICON_BYTES)
             writeCachedArtifact(cloud, meta, readme, icon)
         }
     }
@@ -438,8 +440,8 @@ class NoxsPluginCloudCatalog(
         val iconFile = File(dir, "icon.svg")
         return CloudArtifact(
             cloud, meta,
-            readmeFile.takeIf { it.isFile }?.runCatching { readText(Charsets.UTF_8) }.getOrNull(),
-            iconFile.takeIf { it.isFile }?.runCatching { readBytes() }.getOrNull()
+            readmeFile.takeIf { it.isFile }?.runCatching { readText(Charsets.UTF_8) }?.getOrNull(),
+            iconFile.takeIf { it.isFile }?.runCatching { readBytes() }?.getOrNull()
         )
     }
 
