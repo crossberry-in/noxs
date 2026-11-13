@@ -1166,7 +1166,7 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                     .alpha(0.88f)
                     .scaleX(1.045f)
                     .scaleY(1.045f)
-                    .translationZ(8f * this@TerminalActivity.resources.displayMetrics.density)
+                    .translationZ(8f * target.resources.displayMetrics.density)
                     .setDuration(140L)
                     .start()
                 return true
@@ -1185,7 +1185,7 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                     sessionDisplayOrder.add(destination.coerceIn(0, sessionDisplayOrder.size), moved)
                     RuntimeHolder.sessions?.sessions?.value?.let(::renderSessionTabs)
                 }
-                performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                target.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
                 return true
             }
             android.view.DragEvent.ACTION_DRAG_ENDED -> {
