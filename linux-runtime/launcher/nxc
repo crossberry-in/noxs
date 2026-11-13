@@ -43,7 +43,7 @@ whoami() {
   printf '%s\n' "$response" | python3 -c 'import json,sys; d=json.load(sys.stdin); u=d.get("user") or {}; (print("NXMirror account: "+u.get("username","unknown")+"\\nAccount ID: "+u.get("id","")) if d.get("success") and u else (print(d.get("error","Session expired"),file=sys.stderr),sys.exit(1)))' || fail "Session expired. Run: nxc login"
 }
 publish_file() {
-  local type="$1" name="$2" version="$3" file="$4" token size sha payload response
+  local type="$1" name="$2" version="$3" file="$4" token size sha response
   need_tools; token="$(get_token)"
   [ -f "$file" ] || fail "Artifact not found: $file"
   size="$(wc -c < "$file" | tr -d ' ')"
