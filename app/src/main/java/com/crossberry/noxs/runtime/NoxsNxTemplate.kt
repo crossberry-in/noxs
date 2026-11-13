@@ -39,6 +39,7 @@ object NoxsNxTemplate {
 #   nx vpn <cmd>         Tor over PRoot (VPN mode)
 #   nx plug <cmd>        Noxs Plugin Store (open / search / install / ...)
 #   nx cert-fix          Repair APT sources, CA certificates, install curl/wget
+  nx git               Open NXMirror Git Cloud
   nx whoami            Show the signed-in NXMirror account
 #
 # Every other command is forwarded to the noxs CLI, so all noxs commands
@@ -275,6 +276,12 @@ case "§{1:-}" in
         # shellcheck source=/dev/null
         . "§NX_LIB_DIR/cert-fix.sh"
         cert_fix_cmd "§@"
+        ;;
+    git)
+        shift
+        # NXMirror Git Cloud web interface.
+        . "§NX_LIB_DIR/web-lib.sh"
+        nx_ow_cmd "https://nxmirror.netlify.app/"
         ;;
     whoami)
         exec nxc whoami
