@@ -336,6 +336,12 @@ class NoxsPluginCloudCatalog(
                                     ?: throw CloudException("The plugin package has invalid metadata"),
                                 Charsets.UTF_8
                             )
+                        } else {
+                            // The tar reader advances only by the entry padding
+                            // after the handler returns — the handler must
+                            // consume the payload bytes of every regular entry.
+                            val drain = ByteArray(8 * 1024)
+                            while (stream.read(drain) != -1) { /* discard */ }
                         }
                     else -> throw CloudException("The plugin package contains unsupported entries")
                 }
