@@ -99,27 +99,24 @@ class NoxsPluginCloudCatalogTest {
         version: String = "1.0.0",
         sha: String,
         url: String = "https://mirror.invalid/$name-$version.noxs-plugin",
-        owner: String = "admin"
+        owner: String = "admin",
+        visibility: String = "private"
     ): String = """
         {"success":true,"items":[{"id":"3e3491dd-5fd4","type":"plugin",
           "name":"$name","version":"$version","filename":"$name-$version.noxs-plugin",
           "size":415,"sha256":"$sha","downloadUrl":"$url","owner":"$owner",
-          "publishedAt":"2026-11-13T14:54:55.678Z"}]}
+          "visibility":"$visibility","publishedAt":"2026-11-13T14:54:55.678Z"}]}
     """.trimIndent()
 
     private class FakeHeaderFetcher(
         vararg payloads: Pair<String, ByteArray>
     ) : NoxsPluginCloudCatalog.HeaderFetcher {
         private val queue = ArrayDeque(payloads.toList())
-        var lastUrl: String? = null
-            private set
-        var lastHeaders: Map<String, String> = emptyMap()
-            private set
+        val calls = mutableListOf<Pair<String, Map<String, String>>>()
 
         override fun get(url: String, headers: Map<String, String>, timeoutMs: Int): ByteArray {
             if (!url.startsWith("https://")) throw AssertionError("non-https fetch attempted")
-            lastUrl = url
-            lastHeaders = headers
+            calls.add(url to headers)
             return queue.removeFirstOrNull()?.second
                 ?: throw AssertionError("unexpected extra fetch: $url")
         }
@@ -228,17 +225,44 @@ class NoxsPluginCloudCatalogTest {
     }
 
     @Test
-    fun `listing fetch carries the bearer token`() {
+    fun `listing fetch carries the bearer token on the signed-in call`() {
         val tar = cloudTarBytes()
+        val sha = PluginChecksum.sha256(tar)
         val fetcher = FakeHeaderFetcher(
+            "https://nxmirror.netlify.app/api/cloud/public/plugins" to
+                itemsJson(name = "pub", sha = sha, visibility = "public").toByteArray(),
             "https://nxmirror.netlify.app/api/cloud/plugins" to
-                itemsJson(sha = PluginChecksum.sha256(tar)).toByteArray()
+                itemsJson(sha = sha).toByteArray()
         )
         val cat = catalog(fetcher)
         val entries = cat.entries(refresh = true, force = true)
+        // The public entry and the signed-in account's private entry both arrive.
+        assertEquals(2, entries.size)
+        assertEquals(2, fetcher.calls.size)
+        assertEquals("https://nxmirror.netlify.app/api/cloud/public/plugins", fetcher.calls[0].first)
+        assertEquals(emptyMap<String, String>(), fetcher.calls[0].second)
+        assertEquals("https://nxmirror.netlify.app/api/cloud/plugins", fetcher.calls[1].first)
+        assertEquals("Bearer test-token", fetcher.calls[1].second["Authorization"])
+        assertTrue(cat.lastRefreshOk)
+    }
+
+    @Test
+    fun `public catalog works without a session`() {
+        val tar = cloudTarBytes()
+        val sha = PluginChecksum.sha256(tar)
+        val fetcher = FakeHeaderFetcher(
+            "https://nxmirror.netlify.app/api/cloud/public/plugins" to
+                itemsJson(sha = sha, visibility = "public").toByteArray()
+        )
+        val cat = NoxsPluginCloudCatalog(
+            cacheDir = tmp.newFolder("public-cache"),
+            tokenProvider = { null },
+            fetcher = fetcher
+        )
+        val entries = cat.entries(refresh = true, force = true)
         assertEquals(1, entries.size)
-        assertEquals("https://nxmirror.netlify.app/api/cloud/plugins", fetcher.lastUrl)
-        assertEquals("Bearer test-token", fetcher.lastHeaders["Authorization"])
+        assertEquals("test", entries.first().id)
+        assertEquals("admin", entries.first().author)
         assertTrue(cat.lastRefreshOk)
     }
 

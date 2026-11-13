@@ -51,7 +51,9 @@ class NoxsPluginCloudCatalog(
         val downloadUrl: String,
         val owner: String?,
         val publishedAt: String?,
-        val size: Long
+        val size: Long,
+        /** "public" items appear in the no-login catalog; "private" ones only for the owner. */
+        val visibility: String = "private"
     )
 
     /** Details-page content extracted from a verified .noxs-plugin artifact. */
@@ -125,28 +127,42 @@ class NoxsPluginCloudCatalog(
     }
 
     private fun refreshLocked() {
+        // Two catalogs: the public one works without a session (everyone sees
+        // artifacts published with visibility "public"); the signed-in listing
+        // adds this account's private artifacts. A failed own-listing fetch
+        // degrades to the public catalog only.
         val token = tokenProvider()?.takeIf { it.isNotBlank() }
-            ?: throw CloudException("No NXMirror session")
-        val bytes = fetcher.get(
-            "$API_BASE/cloud/plugins",
-            mapOf(
-                "Accept" to "application/json",
-                "Authorization" to "Bearer $token"
-            ),
-            FETCH_TIMEOUT_MS
-        )
-        if (bytes.isEmpty() || bytes.size > MAX_LIST_BYTES) {
-            throw CloudException("cloud list payload invalid")
+        val fetched = mutableListOf<CloudItem>()
+        fetched += parseItems(fetchText("$API_BASE/cloud/public/plugins", emptyMap()))
+        if (token != null) {
+            runCatching {
+                fetched += parseItems(
+                    fetchText("$API_BASE/cloud/plugins", mapOf("Authorization" to "Bearer $token"))
+                )
+            }.onFailure { NoxsLog.w(TAG, "own listing fetch failed: ${it.javaClass.simpleName}") }
         }
-        val text = String(bytes, Charsets.UTF_8)
-        val items = parseItems(text) // reject broken payloads before caching
+        // One entry per plugin name: the signed-in account's private record
+        // wins, otherwise the newest publish (public catalogs may carry the
+        // same name from several accounts).
+        val merged = fetched.groupBy { it.name }.map { (_, group) ->
+            group.maxByOrNull { (it.visibility == "private") to (it.publishedAt ?: "") }!!
+        }
         cacheDir.mkdirs()
+        val text = serializeItems(merged)
         val tmp = File(cacheDir, ".cloud-items.tmp")
         tmp.writeText(text, Charsets.UTF_8)
         if (!tmp.renameTo(cacheFile)) cacheFile.writeText(text, Charsets.UTF_8)
         fetchStamp.writeText(System.currentTimeMillis().toString(), Charsets.UTF_8)
         lastRefreshOk = true
-        adoptCache = items
+        adoptCache = merged
+    }
+
+    private fun fetchText(url: String, headers: Map<String, String>): String {
+        val bytes = fetcher.get(url, headers, FETCH_TIMEOUT_MS)
+        if (bytes.isEmpty() || bytes.size > MAX_LIST_BYTES) {
+            throw CloudException("cloud list payload invalid")
+        }
+        return String(bytes, Charsets.UTF_8)
     }
 
     // -------------------------------------------------------------- mapping
@@ -378,7 +394,8 @@ class NoxsPluginCloudCatalog(
                 downloadUrl = downloadUrl.trim(),
                 owner = (map["owner"] as? String)?.trim()?.takeIf { it.isNotEmpty() },
                 publishedAt = (map["publishedAt"] as? String)?.trim()?.takeIf { it.isNotEmpty() },
-                size = (map["size"] as? Number)?.toLong() ?: 0L
+                size = (map["size"] as? Number)?.toLong() ?: 0L,
+                visibility = if (map["visibility"] == "public") "public" else "private"
             )
         }.filter {
             PluginJson.validId(it.name) &&
@@ -392,10 +409,26 @@ class NoxsPluginCloudCatalog(
             .map { (_, group) -> group.maxByOrNull { it.publishedAt ?: "" }!! }
     }
 
+    /** Serializes merged items back into the cached listing payload shape. */
+    private fun serializeItems(items: List<CloudItem>): String = buildString {
+        append("{\"success\":true,\"items\":[")
+        append(items.joinToString(",") { item ->
+            "{\"type\":\"plugin\",\"name\":${j(item.name)},\"version\":${j(item.version)}," +
+                "\"sha256\":${j(item.sha256)},\"downloadUrl\":${j(item.downloadUrl)}," +
+                "\"owner\":${item.owner?.let(::j) ?: "null"}," +
+                "\"visibility\":${j(item.visibility)}," +
+                "\"publishedAt\":${item.publishedAt?.let(::j) ?: "null"}," +
+                "\"size\":${item.size}}"
+        })
+        append("]}")
+    }
+
+    private fun j(value: String): String =
+        "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
     // ------------------------------------------------- small-file disk cache
 
     private fun artifactCacheDir(cloud: CloudItem): File = File(File(cacheDir, "cloud"), cloud.sha256)
-
     private fun readCachedArtifact(cloud: CloudItem): CloudArtifact? {
         val dir = artifactCacheDir(cloud)
         val metaFile = File(dir, "plugin.json")
