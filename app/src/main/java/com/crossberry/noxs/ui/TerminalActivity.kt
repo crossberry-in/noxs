@@ -1004,6 +1004,7 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                 minHeight = (48 * dp).toInt()
                 isFocusable = true
                 isClickable = true
+                this.isSelected = isSelected
                 val chipShape = GradientDrawable().apply {
                     cornerRadius = 16f * dp
                     setColor(if (isSelected) ACCENT else ELEVATED)
@@ -1066,10 +1067,19 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                     true
                 }
             }
+            chip.alpha = 0f
+            chip.translationY = (5 * dp)
             row.addView(chip, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { marginEnd = (6 * dp).toInt() })
+            chip.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setStartDelay((orderedSessions.indexOf(entry) * 24L).coerceAtMost(120L))
+                .setDuration(180L)
+                .setInterpolator(android.view.animation.DecelerateInterpolator())
+                .start()
         }
 
         // Compact [+] launcher: shell or root sandbox via overflow, so the
