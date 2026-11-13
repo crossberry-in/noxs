@@ -26,7 +26,9 @@ class NoxsPluginManager(
     cacheDir: File,
     private val appVersion: String,
     fetcher: NoxsPluginRegistry.Fetcher = HttpsFetcher(),
-    guestBinDir: File? = null
+    guestBinDir: File? = null,
+    /** NXMirror cloud plugins (`nxc plugin deploy`) — null keeps registry-only behavior. */
+    val cloudCatalog: NoxsPluginCloudCatalog? = null
 ) {
 
     val registry = NoxsPluginRegistry(File(cacheDir, "plugins"), fetcher)
@@ -39,9 +41,15 @@ class NoxsPluginManager(
 
     // ------------------------------------------------------------- queries
 
-    /** All registry entries (last-good cache when offline). */
-    fun catalog(refresh: Boolean = true, force: Boolean = false): List<RegistryEntry> =
-        registry.entries(refresh, force)
+    /** All registry entries (last-good cache when offline) plus cloud plugins. */
+    fun catalog(refresh: Boolean = true, force: Boolean = false): List<RegistryEntry> {
+        val registryEntries = registry.entries(refresh, force)
+        val cloud = cloudCatalog?.entries(refresh, force).orEmpty()
+        if (cloud.isEmpty()) return registryEntries
+        // The official registry wins on an id collision; cloud plugins fill the rest.
+        val known = registryEntries.map { it.id }.toSet()
+        return registryEntries + cloud.filter { it.id !in known }
+    }
 
     /** Shared search over the catalog (store UI + CLI). */
     fun search(query: String, refresh: Boolean = true): List<RegistryEntry> =
@@ -63,16 +71,26 @@ class NoxsPluginManager(
         val installedById = installed().associateBy { it.meta.id }
         val installedSdks = sdkStore.installedVersions().toSet()
         return catalog(refresh, force).map { entry ->
-            val local = installedById[entry.id]
-            val update = local != null && installer.updateAvailable(entry, local)
+            // Cloud cards are enriched from the verified artifact cache when
+            // one exists (details page opened / plugin installed) — bare
+            // cloud listings carry no description or permissions.
+            val effective = enrich(entry)
+            val local = installedById[effective.id]
+            val update = local != null && installer.updateAvailable(effective, local)
             // A plugin directory that exists but fails validation (broken or
             // tampered) is invisible to listInstalled — surface it as blocked.
-            val blocked = local == null && installer.hasInvalidRecord(entry.id)
+            val blocked = local == null && installer.hasInvalidRecord(effective.id)
             StoreCard(
-                entry, local, update,
-                PluginSdkCatalog.compat(entry, local, appVersion, installedSdks, blocked, update)
+                effective, local, update,
+                PluginSdkCatalog.compat(effective, local, appVersion, installedSdks, blocked, update)
             )
         }
+    }
+
+    /** Replaces a bare cloud entry with its verified metadata when cached. */
+    private fun enrich(entry: RegistryEntry): RegistryEntry {
+        if (entry.readmeUrl != null || entry.artifact == null) return entry
+        return cloudCatalog?.cachedAuthoritativeEntry(entry.id) ?: entry
     }
 
     /** Plugins with a newer registry version (store "Updates" filter). */
@@ -84,30 +102,64 @@ class NoxsPluginManager(
     // ------------------------------------------------------------ lifecycle
 
     /**
-     * Installs a plugin from the registry. SDK requirements are resolved
-     * first — an incompatible or app-update-required plugin is refused with
-     * a user-stable message before anything is downloaded. The selected SDK
-     * release is then made available (downloaded + verified when missing;
-     * a failed download installs the plugin but leaves it in sdk_missing).
+     * Installs a plugin from the registry or, when the id is unknown to the
+     * registry, from the NXMirror cloud catalog. SDK requirements are
+     * resolved first — an incompatible or app-update-required plugin is
+     * refused with a user-stable message before anything is downloaded. The
+     * selected SDK release is then made available (downloaded + verified
+     * when missing; a failed download installs the plugin but leaves it in
+     * sdk_missing).
      */
     fun install(id: String, onProgress: (Int) -> Unit = {}): InstalledPlugin {
-        val entry = registry.entry(id)
-            ?: throw ManagerException("Unknown plugin")
-        gateSdkRequirements(SdkRequirements.from(entry))
-        val installed = installer.install(entry, onProgress)
-        ensureSdkQuietly(SdkRequirements.from(entry), installed.meta.id, onProgress)
-        return installed
+        val registryEntry = registry.entry(id)
+        if (registryEntry != null) return installFromEntry(registryEntry, null, onProgress)
+        val cloud = cloudCatalog ?: throw ManagerException("Unknown plugin")
+        val (entry, bytes) = cloudInstallable(cloud, id)
+        return installFromEntry(entry, bytes, onProgress)
     }
 
     fun update(id: String, onProgress: (Int) -> Unit = {}): InstalledPlugin {
-        val entry = registry.entry(id)
-            ?: throw ManagerException("Unknown plugin")
-        val current = installer.installed(id)
-            ?: throw ManagerException("Plugin is not installed")
+        val registryEntry = registry.entry(id)
+        if (registryEntry != null) {
+            val current = installed(id)
+                ?: throw ManagerException("Plugin is not installed")
+            gateSdkRequirements(SdkRequirements.from(registryEntry))
+            val updated = installer.update(registryEntry, current, onProgress)
+            ensureSdkQuietly(SdkRequirements.from(registryEntry), updated.meta.id, onProgress)
+            return updated
+        }
+        val cloud = cloudCatalog ?: throw ManagerException("Plugin is not installed")
+        val current = installed(id) ?: throw ManagerException("Plugin is not installed")
+        val (entry, bytes) = cloudInstallable(cloud, id)
         gateSdkRequirements(SdkRequirements.from(entry))
-        val updated = installer.update(entry, current, onProgress)
+        // Cloud redeploys may ship new content at the same semver — replace
+        // unconditionally, preserving the enabled state like the registry update.
+        val wasEnabled = current.enabled
+        val updated = installer.install(entry, onProgress, bytes)
+        if (!wasEnabled) installer.disable(updated.meta.id)
         ensureSdkQuietly(SdkRequirements.from(entry), updated.meta.id, onProgress)
         return updated
+    }
+
+    private fun cloudInstallable(
+        cloud: NoxsPluginCloudCatalog,
+        id: String
+    ): Pair<RegistryEntry, ByteArray> =
+        try {
+            cloud.resolveInstallable(id)
+        } catch (e: NoxsPluginCloudCatalog.CloudException) {
+            throw ManagerException(e.message ?: "Unknown plugin")
+        }
+
+    private fun installFromEntry(
+        entry: RegistryEntry,
+        bytes: ByteArray?,
+        onProgress: (Int) -> Unit
+    ): InstalledPlugin {
+        gateSdkRequirements(SdkRequirements.from(entry))
+        val installed = installer.install(entry, onProgress, bytes)
+        ensureSdkQuietly(SdkRequirements.from(entry), installed.meta.id, onProgress)
+        return installed
     }
 
     fun uninstall(id: String) {
@@ -217,7 +269,7 @@ class NoxsPluginManager(
 
     /** CLI-facing status line fields for one plugin id (or null). */
     fun infoLine(id: String): String? {
-        val entry = registry.entry(id)
+        val entry = registry.entry(id) ?: cloudCatalog?.entry(id)
         val local = installed(id)
         if (entry == null && local == null) return null
         val meta = local?.meta

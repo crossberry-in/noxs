@@ -399,7 +399,8 @@ class PluginStoreActivity : AppCompatActivity() {
             rootfsHome = paths.rootfsHomeNoxs,
             cacheDir = app.cacheDir,
             appVersion = appVersion(),
-            guestBinDir = java.io.File(paths.rootfs, "usr/local/bin")
+            guestBinDir = java.io.File(paths.rootfs, "usr/local/bin"),
+            cloudCatalog = noxsPluginCloudCatalog(app, paths.rootfsHomeNoxs)
         )
     }.onFailure {
         com.crossberry.noxs.shared.NoxsLog.w("PluginStore", "manager unavailable: ${it.javaClass.simpleName}")
@@ -514,12 +515,27 @@ class PluginCardAdapter(
         }
         textColumn.addView(nameRow)
 
-        textColumn.addView(TextView(context).apply {
-            text = entry.description
-            setTextColor(0xFF8FA0AF.toInt())
-            textSize = 12f
-            maxLines = 2
-        })
+        // Cloud plugins are listed by owner + plugin name (spec: username /
+        // plugin name); official registry entries carry author only when the
+        // registry upsert declares one.
+        entry.author?.takeIf { it.isNotBlank() }?.let { author ->
+            textColumn.addView(TextView(context).apply {
+                text = context.getString(R.string.plugin_card_by, author)
+                setTextColor(0xFF6B7A88.toInt())
+                textSize = 11f
+            })
+        }
+
+        // Cloud cards carry no description until the details page parses the
+        // artifact — hide the empty line instead of a blank row.
+        if (entry.description.isNotBlank()) {
+            textColumn.addView(TextView(context).apply {
+                text = entry.description
+                setTextColor(0xFF8FA0AF.toInt())
+                textSize = 12f
+                maxLines = 2
+            })
+        }
         val sdkLabel = entry.sdkVersion ?: "0.0.1"
         textColumn.addView(TextView(context).apply {
             text = "v${entry.version}" +

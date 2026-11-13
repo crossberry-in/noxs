@@ -13,15 +13,18 @@ package com.crossberry.noxs.ui
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.graphics.Outline
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -49,7 +52,11 @@ class PluginDetailsActivity : AppCompatActivity() {
     private var pluginId: String = ""
 
     private lateinit var metaColumn: LinearLayout
+    private lateinit var logoBox: FrameLayout
     private lateinit var logoView: ImageView
+    private lateinit var logoLetter: TextView
+    private var cloudLogoView: WebView? = null
+    private var cloudIcon: ByteArray? = null
     private lateinit var actionButton: Button
     private lateinit var secondaryButton: Button
     private lateinit var dangerButton: Button
@@ -81,7 +88,8 @@ class PluginDetailsActivity : AppCompatActivity() {
                 rootfsHome = paths.rootfsHomeNoxs,
                 cacheDir = app.cacheDir,
                 appVersion = appVersion,
-                guestBinDir = java.io.File(paths.rootfs, "usr/local/bin")
+                guestBinDir = java.io.File(paths.rootfs, "usr/local/bin"),
+                cloudCatalog = noxsPluginCloudCatalog(app, paths.rootfsHomeNoxs)
             )
         }.getOrNull()
         buildUi()
@@ -90,18 +98,35 @@ class PluginDetailsActivity : AppCompatActivity() {
 
     private fun load() {
         scope.launch(Dispatchers.IO) {
-            val entryLoaded = manager?.catalog(refresh = true)?.firstOrNull { it.id == pluginId }
+            var entryLoaded = manager?.catalog(refresh = true)?.firstOrNull { it.id == pluginId }
             val installedLoaded = manager?.installed(pluginId)
             manager?.seenStore?.markSeen(listOf(pluginId))
+            var cloudReadme: String? = null
+            var cloudIconLoaded: ByteArray? = null
+            if (entryLoaded != null && entryLoaded.readmeUrl == null && entryLoaded.artifact != null) {
+                // Cloud plugins publish their docs inside the .noxs-plugin
+                // artifact — download once, verify the published checksum and
+                // enrich the entry with the authoritative plugin.json fields.
+                runCatching {
+                    val artifact = manager?.cloudCatalog?.inspect(pluginId)
+                    if (artifact != null) {
+                        entryLoaded = manager?.cloudCatalog
+                            ?.authoritativeEntry(artifact.item, artifact.meta) ?: entryLoaded
+                        cloudReadme = artifact.readme
+                        cloudIconLoaded = artifact.iconSvg
+                    }
+                }
+            }
             val compatLoaded = if (entryLoaded != null) {
+                val entryForCompat = entryLoaded
                 runCatching {
                     com.crossberry.noxs.runtime.plugins.PluginSdkCatalog.compat(
-                        entryLoaded,
+                        entryForCompat,
                         installedLoaded,
                         appVersion,
                         manager?.sdkStore?.installedVersions()?.toSet().orEmpty(),
                         installedLoaded == null && manager?.installer?.hasInvalidRecord(pluginId) == true,
-                        installedLoaded != null && manager?.installer?.updateAvailable(entryLoaded, installedLoaded) == true
+                        installedLoaded != null && manager?.installer?.updateAvailable(entryForCompat, installedLoaded) == true
                     )
                 }.getOrNull()
             } else null
@@ -109,8 +134,9 @@ class PluginDetailsActivity : AppCompatActivity() {
                 entry = entryLoaded
                 current = installedLoaded
                 compat = compatLoaded
+                cloudIcon = cloudIconLoaded
                 renderMeta()
-                loadReadme(entryLoaded, installedLoaded)
+                loadReadme(entryLoaded, installedLoaded, cloudReadme)
             }
         }
     }
@@ -156,54 +182,48 @@ class PluginDetailsActivity : AppCompatActivity() {
         }
         scroll.addView(content)
 
-        // Logo + name + version block.
+        // Logo + name + version block. The logo renders as a circle centered
+        // at the top: a cloud artifact's icon.svg, the registry logoUrl, or a
+        // letter fallback when neither exists.
         metaColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
         }
-        logoView = ImageView(this).apply {
+        logoBox = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams((84 * dp).toInt(), (84 * dp).toInt())
-            scaleType = ImageView.ScaleType.FIT_CENTER
             background = GradientDrawable().apply {
-                cornerRadius = 18f * dp
+                shape = GradientDrawable.OVAL
                 setColor(0xFF121922.toInt())
                 setStroke((1 * dp).toInt(), 0xFF22303C.toInt())
             }
-            setPadding((10 * dp).toInt(), (10 * dp).toInt(), (10 * dp).toInt(), (10 * dp).toInt())
+            clipToOutline = true
+            outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: android.view.View, outline: Outline) {
+                    outline.setOval(0, 0, view.width, view.height)
+                }
+            }
         }
-        metaColumn.addView(logoView)
+        logoView = ImageView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            visibility = TextView.GONE
+            setPadding((16 * dp).toInt(), (16 * dp).toInt(), (16 * dp).toInt(), (16 * dp).toInt())
+        }
+        logoBox.addView(logoView)
+        logoLetter = TextView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            gravity = Gravity.CENTER
+            setTextColor(0xFF7CE8B8.toInt())
+            textSize = 30f
+            visibility = TextView.GONE
+        }
+        logoBox.addView(logoLetter)
+        metaColumn.addView(logoBox)
         content.addView(metaColumn)
-
-        // Primary / secondary / danger actions.
-        actionButton = Button(this).apply {
-            isAllCaps = false
-            textSize = 14f
-        }
-        actionButton.setOnClickListener { primaryAction() }
-        content.addView(actionButton, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { setMargins(0, (10 * dp).toInt(), 0, (4 * dp).toInt()) })
-
-        secondaryButton = Button(this).apply {
-            isAllCaps = false
-            textSize = 14f
-            visibility = TextView.GONE
-        }
-        secondaryButton.setOnClickListener { secondaryAction() }
-        content.addView(secondaryButton, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { setMargins(0, 0, 0, (4 * dp).toInt()) })
-
-        dangerButton = Button(this).apply {
-            isAllCaps = false
-            textSize = 14f
-            setTextColor(0xFFF28B82.toInt())
-            visibility = TextView.GONE
-        }
-        dangerButton.setOnClickListener { confirmUninstall() }
-        content.addView(dangerButton, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ))
 
         // Permissions section.
         permissionsBox = LinearLayout(this).apply {
@@ -244,6 +264,38 @@ class PluginDetailsActivity : AppCompatActivity() {
         content.addView(readmeView, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, (420 * dp).toInt()
         ).apply { setMargins(0, (6 * dp).toInt(), 0, 0) })
+
+        // Primary / secondary / danger actions — pinned to the BOTTOM of the
+        // page (below the docs) so install is always the last thing on screen.
+        actionButton = Button(this).apply {
+            isAllCaps = false
+            textSize = 14f
+        }
+        actionButton.setOnClickListener { primaryAction() }
+        content.addView(actionButton, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(0, (14 * dp).toInt(), 0, (4 * dp).toInt()) })
+
+        secondaryButton = Button(this).apply {
+            isAllCaps = false
+            textSize = 14f
+            visibility = TextView.GONE
+        }
+        secondaryButton.setOnClickListener { secondaryAction() }
+        content.addView(secondaryButton, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(0, 0, 0, (4 * dp).toInt()) })
+
+        dangerButton = Button(this).apply {
+            isAllCaps = false
+            textSize = 14f
+            setTextColor(0xFFF28B82.toInt())
+            visibility = TextView.GONE
+        }
+        dangerButton.setOnClickListener { confirmUninstall() }
+        content.addView(dangerButton, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
     }
 
     private fun sectionLabel(text: String): TextView = TextView(this).apply {
@@ -265,7 +317,8 @@ class PluginDetailsActivity : AppCompatActivity() {
     private fun renderMeta() {
         val e = entry
         metaColumn.removeAllViews()
-        metaColumn.addView(logoView)
+        metaColumn.addView(logoBox)
+        updateLogo(e, current?.meta?.name, cloudIcon)
         when {
             e != null -> {
                 metaColumn.addView(TextView(this).apply {
@@ -577,9 +630,90 @@ class PluginDetailsActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadReadme(e: RegistryEntry?, local: InstalledPlugin?) {
+    private fun metaLine(label: String, value: String?): TextView = TextView(this).apply {
+        text = "$label  ${value?.takeIf { it.isNotBlank() } ?: "-"}"
+        setTextColor(0xFF9AA7B4.toInt())
+        textSize = 13f
+        setPadding(0, (2 * dp).toInt(), 0, (2 * dp).toInt())
+    }
+
+    // ---------------------------------------------------------------- logo
+
+    /**
+     * Logo priority: a cloud artifact's icon.svg (rendered in a JS-disabled,
+     * network-blocked WebView — no SVG rasterizer ships with Android), the
+     * registry logoUrl bitmap, or a letter fallback in the circular frame.
+     */
+    private fun updateLogo(entry: RegistryEntry?, localName: String?, iconSvg: ByteArray?) {
+        cloudLogoView?.let { existing ->
+            logoBox.removeView(existing)
+            existing.destroy()
+            cloudLogoView = null
+        }
+        logoView.visibility = TextView.GONE
+        logoLetter.visibility = TextView.GONE
+        when {
+            iconSvg != null -> renderSvgLogo(iconSvg)
+            entry?.logoUrl?.startsWith("https://") == true -> loadLogoBitmap(entry.logoUrl!!)
+            else -> {
+                val source = localName?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: entry?.name?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: entry?.id?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: "?"
+                logoLetter.text = source.substring(0, 1).uppercase()
+                logoLetter.visibility = TextView.VISIBLE
+            }
+        }
+    }
+
+    private fun renderSvgLogo(svg: ByteArray) {
+        val web = WebView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            settings.javaScriptEnabled = false
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            settings.blockNetworkLoads = true
+            setBackgroundColor(0x00000000)
+        }
+        val encoded = android.util.Base64.encodeToString(svg, android.util.Base64.NO_WRAP)
+        web.loadDataWithBaseURL(
+            null,
+            "<html><body style='margin:0;height:100%;display:flex;" +
+                "align-items:center;justify-content:center'>" +
+                "<img style='max-width:100%;max-height:100%' " +
+                "src=\"data:image/svg+xml;base64,$encoded\"></body></html>",
+            "text/html", "utf-8", null
+        )
+        logoBox.addView(web)
+        cloudLogoView = web
+    }
+
+    /** Fetches the registry logoUrl into the circular frame (bounded, off-thread). */
+    private fun loadLogoBitmap(url: String) {
+        Thread {
+            val bitmap = runCatching {
+                val bytes = PluginHttp.get(url, 10_000, 1L * 1024L * 1024L)
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            }.getOrNull() ?: return@Thread
+            runCatching {
+                logoView.post {
+                    if (!isDestroyed && !isFinishing && this::logoView.isInitialized) {
+                        logoView.setImageBitmap(bitmap)
+                        logoView.visibility = TextView.VISIBLE
+                    }
+                }
+            }
+        }.start()
+    }
+
+    private fun loadReadme(e: RegistryEntry?, local: InstalledPlugin?, cloudReadme: String? = null) {
         scope.launch(Dispatchers.IO) {
             val markdown: String? = when {
+                // Cloud plugins ship their README.md inside the artifact —
+                // already extracted and verified by the inspect step.
+                cloudReadme != null -> cloudReadme
                 local != null && e == null ->
                     runCatching {
                         java.io.File(local.dir, local.meta.readme ?: "README.md")
@@ -630,6 +764,8 @@ class PluginDetailsActivity : AppCompatActivity() {
         if (this::readmeView.isInitialized) {
             readmeView.destroy()
         }
+        cloudLogoView?.destroy()
+        cloudLogoView = null
         super.onDestroy()
     }
 

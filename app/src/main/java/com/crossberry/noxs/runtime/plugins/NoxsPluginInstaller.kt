@@ -102,8 +102,16 @@ class NoxsPluginInstaller(
      * Installs (or replaces) a plugin from a registry entry.
      * Synchronous — call off the main thread; artifacts are small and the
      * store surfaces progress through [onProgress] percentages.
+     *
+     * [bytes] supplies an already-downloaded artifact (cloud install path —
+     * the download happened during metadata resolution); it still goes
+     * through the same size + checksum verification as a fetched artifact.
      */
-    fun install(entry: RegistryEntry, onProgress: (Int) -> Unit = {}): InstalledPlugin = synchronized(lock) {
+    fun install(
+        entry: RegistryEntry,
+        onProgress: (Int) -> Unit = {},
+        bytes: ByteArray? = null
+    ): InstalledPlugin = synchronized(lock) {
         // 1. metadata + compatibility gate (registry entries are untrusted)
         val entryMeta = PluginMeta(
             id = entry.id, name = entry.name, version = entry.version,
@@ -137,19 +145,23 @@ class NoxsPluginInstaller(
         val artifact = entry.artifact?.takeIf { it.startsWith("https://") }
             ?: throw InstallException("No release artifact is published for this plugin yet")
 
-        // 2-3. download + integrity check
+        // 2-3. download (or take the supplied bytes) + integrity check
         onProgress(20)
-        val bytes = try {
-            fetcher.get(artifact, ARTIFACT_TIMEOUT_MS)
-        } catch (e: Exception) {
-            NoxsLog.w("PluginInstaller", "artifact fetch failed: ${e.javaClass.simpleName}")
-            throw InstallException("The plugin package could not be downloaded")
+        val fetched: ByteArray = if (bytes != null) {
+            bytes
+        } else {
+            try {
+                fetcher.get(artifact, ARTIFACT_TIMEOUT_MS)
+            } catch (e: Exception) {
+                NoxsLog.w("PluginInstaller", "artifact fetch failed: ${e.javaClass.simpleName}")
+                throw InstallException("The plugin package could not be downloaded")
+            }
         }
-        if (bytes.isEmpty() || bytes.size > MAX_ARTIFACT_BYTES) {
+        if (fetched.isEmpty() || fetched.size > MAX_ARTIFACT_BYTES) {
             throw InstallException("The plugin package has an invalid size")
         }
         val checksum = entry.checksum?.lowercase()
-        if (!checksum.isNullOrBlank() && PluginChecksum.sha256(bytes) != checksum) {
+        if (!checksum.isNullOrBlank() && PluginChecksum.sha256(fetched) != checksum) {
             throw InstallException("The plugin package failed its integrity check")
         }
         onProgress(60)
@@ -159,7 +171,7 @@ class NoxsPluginInstaller(
         val staging = File(pluginsRoot, ".staging-${entry.id}-${System.nanoTime()}")
         if (!staging.mkdirs()) throw InstallException("Plugin storage is not writable")
         try {
-            extractArtifact(bytes, staging)
+            extractArtifact(fetched, staging)
             validateStaged(staging, entry.id, entry.version, entryMeta)
             onProgress(85)
             if (target.exists()) {
@@ -185,10 +197,15 @@ class NoxsPluginInstaller(
     }
 
     /** Updates a plugin to its registry version (preserving enabled state). */
-    fun update(entry: RegistryEntry, current: InstalledPlugin, onProgress: (Int) -> Unit = {}): InstalledPlugin {
+    fun update(
+        entry: RegistryEntry,
+        current: InstalledPlugin,
+        onProgress: (Int) -> Unit = {},
+        bytes: ByteArray? = null
+    ): InstalledPlugin {
         if (!updateAvailable(entry, current)) return current
         val wasEnabled = current.enabled
-        val result = install(entry, onProgress)
+        val result = install(entry, onProgress, bytes)
         if (!wasEnabled) disable(result.meta.id)
         return installed(result.meta.id) ?: result
     }

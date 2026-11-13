@@ -211,7 +211,10 @@ class NoxsService : Service() {
             appVersion = runCatching {
                 packageManager.getPackageInfo(packageName, 0).versionName
             }.getOrNull() ?: "0.0.0",
-            guestBinDir = java.io.File(paths.rootfs, "usr/local/bin")
+            guestBinDir = java.io.File(paths.rootfs, "usr/local/bin"),
+            // Cloud catalog so `nx plug install <id>` reaches NXMirror-published
+            // plugins through the same bridge hooks as registry plugins.
+            cloudCatalog = com.crossberry.noxs.ui.noxsPluginCloudCatalog(app, paths.rootfsHomeNoxs)
         )
         pluginManager = manager
         val bridge = com.crossberry.noxs.runtime.plugins.NoxsPluginBridge(paths)

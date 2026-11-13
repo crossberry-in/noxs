@@ -128,7 +128,7 @@ class NoxsPluginRegistry(
 /** HTTPS-only fetch helper used by the registry and the installer. */
 object PluginHttp {
 
-    fun get(url: String, timeoutMs: Int, maxBytes: Long): ByteArray {
+    fun get(url: String, timeoutMs: Int, maxBytes: Long, headers: Map<String, String> = emptyMap()): ByteArray {
         val normalized = url.trim()
         if (!normalized.startsWith("https://")) {
             throw IllegalArgumentException("only https:// URLs are fetched")
@@ -139,6 +139,7 @@ object PluginHttp {
             connection.readTimeout = timeoutMs
             connection.instanceFollowRedirects = true
             connection.setRequestProperty("User-Agent", "Noxs-PluginStore")
+            headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
             val code = connection.responseCode
             if (code !in 200..299) throw IOException("HTTP $code")
             val bounded = BoundedSink(maxBytes)

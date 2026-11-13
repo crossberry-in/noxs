@@ -499,6 +499,7 @@
     <string name="plugin_action_blocked">Update Noxs</string>
     <string name="plugin_badge_new">NEW</string>
     <string name="plugin_badge_update">UPDATE</string>
+    <string name="plugin_card_by">by %1$s</string>
     <string name="plugin_sdk_line">  •  SDK %1$s</string>
     <string name="plugin_store_offline">Offline — showing the last cached plugin list.</string>
     <string name="plugin_filter_compatible">Compatible</string>
