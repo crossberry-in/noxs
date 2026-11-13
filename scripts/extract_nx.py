@@ -18,6 +18,7 @@ RUNTIME_DIR = "app/src/main/java/com/crossberry/noxs/runtime"
 # constant name -> (kotlin file, relative mirror path)
 SHELL_CONSTANTS = {
     "NX_CLI": ("NoxsNxTemplate.kt", "linux-runtime/launcher/nx"),
+    "CLOUD_CLI": ("NoxsNxCloud.kt", "linux-runtime/launcher/nxc"),
     "PKG_LIB": ("NoxsNxPkgLib.kt", "linux-runtime/nx/pkg-lib.sh"),
     "PKG_UI": ("NoxsNxPkgUi.kt", "linux-runtime/nx/pkg-ui.sh"),
     "PKG_MANAGER": ("NoxsNxPkgManager.kt", "linux-runtime/nx/pkg-manager.sh"),
