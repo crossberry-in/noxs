@@ -168,7 +168,7 @@ case "§{1:-}" in
                 pkg_release_cmd "§@"
                 ;;
             deploy)
-                nxc pkg deploy "${PWD}"
+                nxc pkg deploy "§{PWD}"
                 ;;
             info)
                 # `nx pkg info` — merged view: mirror index + distro policy
@@ -280,7 +280,7 @@ case "§{1:-}" in
         exec nxc whoami
         ;;
     nxc)
-        exec /usr/local/bin/nxc "${@:2}"
+        exec /usr/local/bin/nxc "§{@:2}"
         ;;
     install)
         shift                       # drop "install" — it is NOT a package name
