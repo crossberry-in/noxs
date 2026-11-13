@@ -43,28 +43,35 @@ whoami() {
   printf '%s\n' "$response" | python3 -c 'import json,sys; d=json.load(sys.stdin); u=d.get("user") or {}; (print("NXMirror account: "+u.get("username","unknown")+"\\nAccount ID: "+u.get("id","")) if d.get("success") and u else (print(d.get("error","Session expired"),file=sys.stderr),sys.exit(1)))' || fail "Session expired. Run: nxc login"
 }
 publish_file() {
-  local type="$1" name="$2" version="$3" file="$4" token size sha response
+  local type="$1" name="$2" version="$3" file="$4" visibility="${5:-private}" token size sha response
   need_tools; token="$(get_token)"
   [ -f "$file" ] || fail "Artifact not found: $file"
+  [ "$visibility" = public ] || [ "$visibility" = private ] || fail "Visibility must be public or private"
   size="$(wc -c < "$file" | tr -d ' ')"
   [ "$size" -le 4194304 ] || fail "Direct CLI upload limit is 4 MiB. Use a smaller artifact."
   sha="$(sha256sum "$file" | awk '{print $1}')"
   mkdir -p "$CONFIG_DIR"
-  python3 - "$type" "$name" "$version" "$(basename "$file")" "$file" "$sha" > "$CONFIG_DIR/publish.json" <<'PY'
+  python3 - "$type" "$name" "$version" "$(basename "$file")" "$file" "$sha" "$visibility" > "$CONFIG_DIR/publish.json" <<'PY'
 import base64, hashlib, json, pathlib, sys
-kind, name, version, filename, path, sha = sys.argv[1:]
+kind, name, version, filename, path, sha, visibility = sys.argv[1:]
 raw = pathlib.Path(path).read_bytes()
 if hashlib.sha256(raw).hexdigest() != sha: raise SystemExit("artifact changed during upload")
-print(json.dumps({"type":kind,"name":name,"version":version,"filename":filename,"sha256":sha,"base64":base64.b64encode(raw).decode("ascii")},separators=(",",":")))
+print(json.dumps({"type":kind,"name":name,"version":version,"filename":filename,"sha256":sha,"visibility":visibility,"base64":base64.b64encode(raw).decode("ascii")},separators=(",",":")))
 PY
-  printf 'Uploading %s %s (%s bytes)...\n' "$name" "$version" "$size"
+  printf 'Uploading %s %s (%s bytes, %s)...\n' "$name" "$version" "$size" "$visibility"
   response="$(api POST cloud/publish "$CONFIG_DIR/publish.json" "$token")" || fail "Cloud upload request failed"
   rm -f "$CONFIG_DIR/publish.json"
-  printf '%s\n' "$response" | python3 -c 'import json,sys; d=json.load(sys.stdin); a=d.get("artifact"); print("Published: "+a["name"]+" "+a["version"]+"\nDownload: "+a["downloadUrl"]+"\nSHA-256: "+a["sha256"]) if d.get("success") and a else (print(d.get("error","Publish failed"),file=sys.stderr),sys.exit(1))'
+  printf '%s\n' "$response" | python3 -c 'import json,sys; d=json.load(sys.stdin); a=d.get("artifact"); print("Published: "+a["name"]+" "+a["version"]+" ("+a.get("visibility","private")+")"+"\nDownload: "+a["downloadUrl"]+"\nSHA-256: "+a["sha256"]) if d.get("success") and a else (print(d.get("error","Publish failed"),file=sys.stderr),sys.exit(1))'
 }
 pkg_deploy() {
-  local dir name version artifact
-  dir="${1:-.}"
+  local dir="" name version artifact visibility="private"
+  for arg in "$@"; do
+    case "$arg" in
+      --public) visibility="public" ;;
+      *) dir="$arg" ;;
+    esac
+  done
+  dir="${dir:-.}"
   [ -d "$dir" ] || fail "Package directory not found"
   cd "$dir"
   name="$(basename "$PWD" | tr '[:upper:]' '[:lower:]')"
@@ -73,7 +80,7 @@ pkg_deploy() {
   if ! compgen -G "dist/*.nx.pkg.$version.*.tar.xz" >/dev/null; then nx pkg release; fi
   artifact="$(find dist -maxdepth 1 -type f -name "*.nx.pkg.$version.*.tar.xz" | sort | head -n1)"
   [ -n "$artifact" ] || fail "No package artifact found in dist/"
-  publish_file package "$name" "$version" "$artifact"
+  publish_file package "$name" "$version" "$artifact" "$visibility"
 }
 plugin_init() {
   local id="${1:-}"
@@ -107,8 +114,14 @@ EOF
   printf 'Created plugin scaffold: %s\nNext: edit plugin.js, then nxc plugin deploy %s\n' "$id" "$id"
 }
 plugin_deploy() {
-  local dir id version artifact
-  dir="${1:-.}"; [ -d "$dir" ] || fail "Plugin directory not found"
+  local dir="" id version artifact visibility="private"
+  for arg in "$@"; do
+    case "$arg" in
+      --public) visibility="public" ;;
+      *) dir="$arg" ;;
+    esac
+  done
+  dir="${dir:-.}"; [ -d "$dir" ] || fail "Plugin directory not found"
   cd "$dir"; [ -f plugin.json ] || fail "plugin.json is missing"
   id="$(python3 -c 'import json;print(json.load(open("plugin.json"))["id"])')"
   version="$(python3 -c 'import json;print(json.load(open("plugin.json"))["version"])')"
@@ -120,7 +133,7 @@ plugin_deploy() {
   [ -f icon.svg ] && files+=(icon.svg)
   [ -d bin ] && files+=(bin)
   tar -czf "$artifact" -- "${files[@]}"
-  publish_file plugin "$id" "$version" "$artifact"
+  publish_file plugin "$id" "$version" "$artifact" "$visibility"
 }
 usage() {
   cat <<'EOF'
@@ -129,11 +142,21 @@ nxc — Noxs Mirror cloud client
   nxc login                    Login to NXMirror
   nxc whoami                   Show the signed-in account
   nxc logout                   Remove this device's session
-  nxc pkg deploy [directory]   Build and publish a .nx.pkg artifact
+  nxc pkg deploy [--public] [directory]
+                               Build and publish a .nx.pkg artifact
+                               (default visibility: private)
   nxc plugin init <id>         Create a plugin project
-  nxc plugin deploy [directory] Package and publish a Noxs plugin
-  nxc packages                 List your cloud packages
-  nxc plugins                  List your cloud plugins
+  nxc plugin deploy [--public] [directory]
+                               Package and publish a Noxs plugin
+                               (default visibility: private)
+  nxc packages [--public]      List your cloud packages; with --public the
+                               no-login public catalog
+  nxc plugins [--public]       List your cloud plugins; with --public the
+                               no-login public catalog
+
+Visibility: private artifacts are listed and downloadable only for the
+signed-in owner; public artifacts appear in the public catalog for
+everyone, no login required.
 EOF
 }
 case "${1:-help}" in
@@ -141,17 +164,25 @@ case "${1:-help}" in
   login) auth login ;;
   whoami) whoami ;;
   logout) rm -f "$TOKEN_FILE"; printf 'Logged out.\n' ;;
-  pkg) [ "${2:-}" = deploy ] || fail "Usage: nxc pkg deploy [directory]"; pkg_deploy "${3:-.}" ;;
+  pkg) shift; [ "${1:-}" = deploy ] || fail "Usage: nxc pkg deploy [--public] [directory]"; shift; pkg_deploy "$@" ;;
   plugin)
     case "${2:-}" in
       init) plugin_init "${3:-}" ;;
-      deploy) plugin_deploy "${3:-.}" ;;
-      *) fail "Usage: nxc plugin init <id> | deploy [directory]" ;;
+      deploy) shift 2; plugin_deploy "$@" ;;
+      *) fail "Usage: nxc plugin init <id> | deploy [--public] [directory]" ;;
     esac ;;
   packages|plugins)
-    token="$(get_token)"
-    route=packages; [ "$1" = plugins ] && route=plugins
-    api GET "cloud/$route" "" "$token" | python3 -m json.tool ;;
+    cmd="$1"
+    shift
+    public=0
+    for arg in "$@"; do [ "$arg" = --public ] && public=1; done
+    route=packages; [ "$cmd" = plugins ] && route=plugins
+    if [ "$public" = 1 ]; then
+      api GET "cloud/public/$route" "" "" | python3 -m json.tool
+    else
+      token="$(get_token)"
+      api GET "cloud/$route" "" "$token" | python3 -m json.tool
+    fi ;;
   -h|--help|help) usage ;;
   *) usage; exit 2 ;;
 esac
