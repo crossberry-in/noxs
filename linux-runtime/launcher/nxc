@@ -40,7 +40,7 @@ whoami() {
   local token response
   token="$(get_token)"
   response="$(api GET auth/me "" "$token")" || fail "Could not reach NXMirror"
-  printf '%s\n' "$response" | python3 -c 'import json,sys; d=json.load(sys.stdin); u=d.get("user") or {}; print("NXMirror account: "+u.get("username","unknown")); print("Account ID: "+u.get("id",""))' || fail "Session expired. Run: nxc login"
+  printf '%s\n' "$response" | python3 -c 'import json,sys; d=json.load(sys.stdin); u=d.get("user") or {}; (print("NXMirror account: "+u.get("username","unknown")+"\\nAccount ID: "+u.get("id","")) if d.get("success") and u else (print(d.get("error","Session expired"),file=sys.stderr),sys.exit(1)))' || fail "Session expired. Run: nxc login"
 }
 publish_file() {
   local type="$1" name="$2" version="$3" file="$4" token size sha payload response
