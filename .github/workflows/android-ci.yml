@@ -73,6 +73,10 @@ jobs:
         run: |
           set -o pipefail
           ./gradlew assembleDebug assembleRelease testDebugUnitTest :terminal-emulator:test --stacktrace 2>&1 | tee gradle-build.log
+          mkdir -p build-distributions
+          cp app/build/outputs/apk/release/app-release.apk build-distributions/noxs-full.apk
+          ./gradlew assembleRelease -PnoxsLite=true --stacktrace
+          cp app/build/outputs/apk/release/app-release.apk build-distributions/noxs-lite.apk
 
       - name: Surface gradle failures
         if: failure()
@@ -86,8 +90,18 @@ jobs:
 
       - name: Verify debug APK application ID
         run: |
-          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk \
+          AAPT="$ANDROID_HOME/build-tools/34.0.0/aapt"
+          "$AAPT" dump badging app/build/outputs/apk/debug/app-debug.apk \
             | grep -F "package: name='com.crossberry.noxs'" >/dev/null
+          "$AAPT" dump badging build-distributions/noxs-full.apk \
+            | grep -F "package: name='com.crossberry.noxs'" >/dev/null
+          "$AAPT" dump badging build-distributions/noxs-lite.apk \
+            | grep -F "package: name='com.crossberry.noxs'" >/dev/null
+          unzip -l build-distributions/noxs-full.apk | grep -F "assets/bootstrap/arm64-v8a/rootfs.bin" >/dev/null
+          if unzip -l build-distributions/noxs-lite.apk | grep -F "assets/bootstrap/arm64-v8a/rootfs.bin"; then
+            echo "Lite APK unexpectedly contains the offline rootfs" >&2
+            exit 1
+          fi
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
@@ -99,7 +113,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: noxs-release-apk
-          path: app/build/outputs/apk/release/app-release.apk
+          path: build-distributions/noxs-full.apk
+
+      - name: Upload Lite APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: noxs-lite-apk
+          path: build-distributions/noxs-lite.apk
 
       - name: Upload offline Ubuntu rootfs for release
         uses: actions/upload-artifact@v4
@@ -327,38 +347,47 @@ jobs:
           ./gradlew assembleRelease --stacktrace \
             -PnoxsVersionName="$RELEASE_VERSION" \
             -PnoxsVersionCode="$RELEASE_VERSION_CODE"
+          mkdir -p release-assets
+          cp app/build/outputs/apk/release/app-release.apk "release-assets/noxs-\${RELEASE_VERSION}-full.apk"
+          ./gradlew assembleRelease --stacktrace -PnoxsLite=true \
+            -PnoxsVersionName="$RELEASE_VERSION" \
+            -PnoxsVersionCode="$RELEASE_VERSION_CODE"
+          cp app/build/outputs/apk/release/app-release.apk "release-assets/noxs-\${RELEASE_VERSION}-lite.apk"
 
       - name: Verify package ID and stage versioned APK
         env:
           RELEASE_VERSION: ${{ steps.release_version.outputs.version }}
         run: |
-          APK="app/build/outputs/apk/release/app-release.apk"
           AAPT="$ANDROID_HOME/build-tools/34.0.0/aapt"
-          "$AAPT" dump badging "$APK" | grep -F "package: name='com.crossberry.noxs'" >/dev/null
-          # The bundled asset must be reachable under the manifest's name —
-          # guard against aapt ever resurrecting its .gz handling.
-          unzip -l "$APK" | grep -F "assets/bootstrap/arm64-v8a/rootfs.bin" >/dev/null
-          mkdir -p release-assets
-          cp "$APK" "release-assets/noxs-${RELEASE_VERSION}.apk"
-          cp offline-rootfs/rootfs.bin "release-assets/noxs-debian-bookworm-arm64.tar.gz"
-          # Publish the checksum sidecar next to the asset so installed APKs
-          # whose embedded manifest pin is stale can still verify downloads.
+          FULL="release-assets/noxs-${RELEASE_VERSION}-full.apk"
+          LITE="release-assets/noxs-${RELEASE_VERSION}-lite.apk"
+          "$AAPT" dump badging "$FULL" | grep -F "package: name='com.crossberry.noxs'" >/dev/null
+          "$AAPT" dump badging "$LITE" | grep -F "package: name='com.crossberry.noxs'" >/dev/null
+          unzip -l "$FULL" | grep -F "assets/bootstrap/arm64-v8a/rootfs.bin" >/dev/null
+          if unzip -l "$LITE" | grep -F "assets/bootstrap/arm64-v8a/rootfs.bin"; then
+            echo "Lite APK unexpectedly contains the offline rootfs" >&2
+            exit 1
+          fi
+          cp offline-rootfs/rootfs.bin "release-assets/noxs-ubuntu-24.04-arm64.tar.gz"
           sha256sum offline-rootfs/rootfs.bin \
-            | awk '{print $1"  noxs-debian-bookworm-arm64.tar.gz"}' \
-            > release-assets/noxs-debian-bookworm-arm64.tar.gz.sha256
-          cat release-assets/noxs-debian-bookworm-arm64.tar.gz.sha256
+            | awk '{print $1"  noxs-ubuntu-24.04-arm64.tar.gz"}' \
+            > release-assets/noxs-ubuntu-24.04-arm64.tar.gz.sha256
+          cat release-assets/noxs-ubuntu-24.04-arm64.tar.gz.sha256
 
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: noxs-${{ steps.release_version.outputs.version }}
-          path: release-assets/noxs-${{ steps.release_version.outputs.version }}.apk
+          name: noxs-${{ steps.release_version.outputs.version }}-apks
+          path: |
+            release-assets/noxs-${{ steps.release_version.outputs.version }}-full.apk
+            release-assets/noxs-${{ steps.release_version.outputs.version }}-lite.apk
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release-assets/noxs-${{ steps.release_version.outputs.version }}.apk
-            release-assets/noxs-debian-bookworm-arm64.tar.gz
-            release-assets/noxs-debian-bookworm-arm64.tar.gz.sha256
+            release-assets/noxs-${{ steps.release_version.outputs.version }}-full.apk
+            release-assets/noxs-${{ steps.release_version.outputs.version }}-lite.apk
+            release-assets/noxs-ubuntu-24.04-arm64.tar.gz
+            release-assets/noxs-ubuntu-24.04-arm64.tar.gz.sha256
           generate_release_notes: true
