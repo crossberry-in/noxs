@@ -87,7 +87,7 @@ class NoxsPkgManagerTest {
         assertTrue(pkgManager.contains("PACKAGE_MANAGER_BUSY"))
         assertTrue("lock must be armed and released", pkgManager.contains("pkgm_lock_arm"))
         assertTrue(pkgManager.contains("pkgm_lock_release"))
-        assertTrue("Noxs transaction marker is the single-flight signal", pkgManager.contains("if [ -f \"$PKG_TX_DIR/pkg-tx\" ]"))
+        assertTrue("Noxs transaction marker is the single-flight signal", pkgManager.contains("""if [ -f "${'$'}PKG_TX_DIR/pkg-tx" ]"""))
         assertFalse("PRoot process scans must not block healthy apt operations", pkgManager.contains("pgrep -x"))
     }
 
