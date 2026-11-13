@@ -1017,7 +1017,7 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                     chipMask
                 )
                 setPadding((14 * dp).toInt(), (8 * dp).toInt(), (14 * dp).toInt(), (8 * dp).toInt())
-                tooltipText = entry.label + " · Long press for session actions"
+                androidx.appcompat.widget.TooltipCompat.setTooltipText(this, entry.label + " · Long press for session actions")
                 setOnHoverListener { view, event ->
                     when (event.action) {
                         MotionEvent.ACTION_HOVER_ENTER -> view.animate().scaleX(1.025f).scaleY(1.025f).setDuration(120L).start()
