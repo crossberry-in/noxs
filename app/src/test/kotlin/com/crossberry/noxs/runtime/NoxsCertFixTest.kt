@@ -37,8 +37,8 @@ class NoxsCertFixTest {
 
     @Test
     fun `package system version is 15 - existing installs migrate without a reinstall`() {
-        assertEquals("15", RootfsConfigurator.NX_PACKAGE_SYSTEM_VERSION)
-        assertEquals("15\n", installed("usr/local/share/noxs-pkg/.nx-version").readText())
+        assertEquals("16", RootfsConfigurator.NX_PACKAGE_SYSTEM_VERSION)
+        assertEquals("16\n", installed("usr/local/share/noxs-pkg/.nx-version").readText())
     }
 
     @Test
