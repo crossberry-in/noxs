@@ -121,7 +121,7 @@ plugin_deploy() {
   id="§(python3 -c 'import json;print(json.load(open("plugin.json"))["id"])')"
   version="§(python3 -c 'import json;print(json.load(open("plugin.json"))["version"])')"
   [[ "§id" =~ ^[a-z0-9][a-z0-9-]{1,63}§ ]] || fail "Invalid plugin id"
-  [[ "§version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][A-Za-z0-9.-]+)?§ ]] || fail "Invalid plugin version"
+  [[ "§version" =~ ^[0-9]+\.[0-9]+\.[0-9]+§ ]] || fail "Invalid plugin version"
   mkdir -p dist
   artifact="dist/§id-§version.noxs-plugin"
   local files=(plugin.json plugin.js README.md)
