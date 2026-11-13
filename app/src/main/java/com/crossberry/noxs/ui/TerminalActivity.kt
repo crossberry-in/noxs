@@ -177,6 +177,7 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
         // Drawer: managers. nav_noxos opens the NoxOS emulator window, which
         // AUTO-BOOTS the VM on open (Noxs × NoxOS M2 integration contract).
         val routes = mapOf(
+            binding.navMirrorAccount to NoxsMirrorAccountActivity::class.java,
             binding.navNoxos to com.crossberry.noxs.emulator.EmulatorActivity::class.java,
             binding.navFiles to FileBrowserActivity::class.java,
             binding.navEditor to EditorActivity::class.java,
