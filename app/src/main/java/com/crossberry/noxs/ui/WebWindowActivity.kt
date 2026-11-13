@@ -78,6 +78,7 @@ class WebWindowActivity : AppCompatActivity() {
     private var hasSavedState = false
 
     private var uploadCallback: ValueCallback<Array<Uri>>? = null
+    private var mirrorAuthInjected = false
 
     private val dp by lazy { resources.displayMetrics.density }
 
@@ -548,6 +549,19 @@ class WebWindowActivity : AppCompatActivity() {
 
         override fun onPageFinished(view: WebView, url: String) {
             super.onPageFinished(view, url)
+            val uri = Uri.parse(url)
+            if (!mirrorAuthInjected && uri.scheme == "https" && uri.host == "nxmirror.netlify.app") {
+                val token = NoxsMirrorSession.token(this@WebWindowActivity)
+                if (!token.isNullOrBlank()) {
+                    mirrorAuthInjected = true
+                    val safeToken = org.json.JSONObject.quote(token)
+                    view.evaluateJavascript(
+                        "localStorage.setItem('demoapi.session', $safeToken); window.location.reload();",
+                        null
+                    )
+                    return
+                }
+            }
             statusLabel.text = view.title?.take(48) ?: getString(R.string.web_ready)
         }
     }
