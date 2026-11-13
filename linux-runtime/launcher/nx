@@ -1,4 +1,4 @@
-"#!/bin/bash
+#!/bin/bash
 # nx — Noxs package CLI + noxs command forwarder (original implementation)
 #
 # Package commands (NX Package System):
