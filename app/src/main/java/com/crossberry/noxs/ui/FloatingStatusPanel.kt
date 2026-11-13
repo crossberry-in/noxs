@@ -10,6 +10,8 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
+import android.content.res.ColorStateList
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
@@ -33,9 +35,9 @@ class FloatingStatusPanel(context: Context) : LinearLayout(context) {
     init {
         val dp = resources.displayMetrics.density
         background = GradientDrawable().apply {
-            cornerRadius = 12f * dp
-            setColor(0xF2101418.toInt())
-            setStroke((1 * dp).toInt(), 0xFF2F3946.toInt())
+            cornerRadius = 26f * dp
+            setColor(0xE6111418.toInt())
+            setStroke((1 * dp).toInt(), 0x55FFFFFF)
         }
         elevation = 8f * dp
         val pad = (10 * dp).toInt()
@@ -47,7 +49,7 @@ class FloatingStatusPanel(context: Context) : LinearLayout(context) {
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.WRAP_CONTENT,
             Gravity.BOTTOM
-        ).apply { setMargins((8 * dp).toInt(), 0, (8 * dp).toInt(), (8 * dp).toInt()) }
+        ).apply { setMargins((12 * dp).toInt(), 0, (12 * dp).toInt(), (12 * dp).toInt()) }
 
         // Header: Noxs + status
         val header = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -105,11 +107,24 @@ class FloatingStatusPanel(context: Context) : LinearLayout(context) {
                 gravity = Gravity.CENTER
                 setPadding((12 * dp).toInt(), (6 * dp).toInt(), (12 * dp).toInt(), (6 * dp).toInt())
                 setTextColor(if (danger) 0xFFFF8A80.toInt() else 0xFF3DDC84.toInt())
-                background = GradientDrawable().apply {
-                    cornerRadius = 8f * dp
-                    setColor(0xFF1C232C.toInt())
-                    setStroke((1 * dp).toInt(), 0xFF2F3946.toInt())
+                minHeight = (48 * dp).toInt()
+                isFocusable = true
+                isClickable = true
+                contentDescription = label
+                val shape = GradientDrawable().apply {
+                    cornerRadius = 16f * dp
+                    setColor(0xCC20262D.toInt())
+                    setStroke((1 * dp).toInt(), 0x55FFFFFF)
                 }
+                val mask = GradientDrawable().apply {
+                    cornerRadius = 16f * dp
+                    setColor(Color.WHITE)
+                }
+                background = RippleDrawable(
+                    ColorStateList.valueOf(0x44FFFFFF),
+                    shape,
+                    mask
+                )
                 setOnClickListener { onClick() }
             }
         listOf(
@@ -162,7 +177,7 @@ class FloatingStatusPanel(context: Context) : LinearLayout(context) {
     private fun TextView.setStyleBold() { paint.isFakeBoldText = true }
 
     private fun separator(context: Context): View = View(context).apply {
-        setBackgroundColor(0xFF2F3946.toInt())
+        setBackgroundColor(0x44FFFFFF.toInt())
         layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, (1 * resources.displayMetrics.density).toInt()).apply {
             setMargins(0, (8 * resources.displayMetrics.density).toInt(), 0, (8 * resources.displayMetrics.density).toInt())
         }
