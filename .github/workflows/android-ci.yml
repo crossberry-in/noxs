@@ -356,10 +356,18 @@ jobs:
             -PnoxsVersionCode="$RELEASE_VERSION_CODE"
           mkdir -p release-assets
           cp app/build/outputs/apk/release/app-release.apk "release-assets/noxs-${RELEASE_VERSION}-full.apk"
+          # Deterministic Lite build: same workaround as the android-build job —
+          # the sourceSets asset exclude is not honored by every AGP asset-merge
+          # path (run 43434408543 shipped the 188 MB rootfs inside the Lite APK,
+          # and the first v1.2.0 release attempt hit the same leak), so move the
+          # rootfs out of the source set for this invocation and restore it after.
+          ROOTFS=app/src/main/assets/bootstrap/arm64-v8a/rootfs.bin
+          if [ -f "$ROOTFS" ]; then mv "$ROOTFS" "$RUNNER_TEMP/rootfs.bin"; fi
           ./gradlew assembleRelease --stacktrace -PnoxsLite=true \
             -PnoxsVersionName="$RELEASE_VERSION" \
             -PnoxsVersionCode="$RELEASE_VERSION_CODE"
           cp app/build/outputs/apk/release/app-release.apk "release-assets/noxs-${RELEASE_VERSION}-lite.apk"
+          if [ -f "$RUNNER_TEMP/rootfs.bin" ]; then mv "$RUNNER_TEMP/rootfs.bin" "$ROOTFS"; fi
 
       - name: Verify package ID and stage versioned APK
         env:
