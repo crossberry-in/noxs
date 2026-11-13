@@ -6,7 +6,7 @@ package com.crossberry.noxs.runtime
  * with owner-only permissions and never written into the package repository.
  */
 object NoxsNxCloud {
-    val CLI = """#!/usr/bin/env bash
+    val CLOUD_CLI = """#!/usr/bin/env bash
 set -Eeuo pipefail
 
 API_BASE="§{NOXS_MIRROR_API:-https://nxmirror.netlify.app/api}"
