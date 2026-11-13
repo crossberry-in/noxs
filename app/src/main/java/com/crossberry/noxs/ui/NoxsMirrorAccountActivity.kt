@@ -278,8 +278,10 @@ class NoxsMirrorAccountActivity : AppCompatActivity() {
     }
 
     private fun setBusy(busy: Boolean) {
-        loginButton.isEnabled = !busy
-        registerButton.isEnabled = !busy
+        val signedIn = !NoxsMirrorSession.token(this).isNullOrBlank()
+        loginButton.isEnabled = !busy && !signedIn
+        registerButton.isEnabled = !busy && !signedIn
+        logoutButton.isEnabled = !busy && signedIn
         status.text = if (busy) "Connecting to NXMirror…" else status.text
     }
 }
