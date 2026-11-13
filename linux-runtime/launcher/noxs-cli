@@ -130,9 +130,19 @@ code_http_ok() {
 
 code_wait_ready() {
     local addr="$1" timeout="${2:-45}"
+    # The freshly spawned server is still inside its fork/exec chain for the
+    # first moments (nohup -> wrapper -> binary): the port is not bound yet
+    # and /proc may not yet show the final code-server identity. Do not trust
+    # the liveness check until a short grace window has passed, or a loaded
+    # host makes the launcher kill a healthy starting server.
+    local grace=5
     for _ in $(seq 1 "$timeout"); do
         if code_http_ok "$addr"; then return 0; fi
-        code_running || return 1
+        if [ "$grace" -gt 0 ]; then
+            grace=$((grace - 1))
+        else
+            code_running || return 1
+        fi
         sleep 1
     done
     return 1

@@ -75,8 +75,15 @@ jobs:
           ./gradlew assembleDebug assembleRelease testDebugUnitTest :terminal-emulator:test --stacktrace 2>&1 | tee gradle-build.log
           mkdir -p build-distributions
           cp app/build/outputs/apk/release/app-release.apk build-distributions/noxs-full.apk
+          # Deterministic Lite build: the sourceSets asset exclude is not
+          # honored by every AGP asset-merge path (run 43434408543 shipped
+          # the 188 MB rootfs inside the Lite APK), so move the rootfs out
+          # of the source set for this invocation and restore it after.
+          ROOTFS=app/src/main/assets/bootstrap/arm64-v8a/rootfs.bin
+          if [ -f "$ROOTFS" ]; then mv "$ROOTFS" "$RUNNER_TEMP/rootfs.bin"; fi
           ./gradlew assembleRelease -PnoxsLite=true --stacktrace
           cp app/build/outputs/apk/release/app-release.apk build-distributions/noxs-lite.apk
+          if [ -f "$RUNNER_TEMP/rootfs.bin" ]; then mv "$RUNNER_TEMP/rootfs.bin" "$ROOTFS"; fi
 
       - name: Surface gradle failures
         if: failure()
