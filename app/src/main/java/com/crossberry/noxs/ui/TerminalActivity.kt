@@ -201,6 +201,11 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
             }
         }
 
+        binding.navGit.setOnClickListener {
+            binding.drawer.closeDrawer(GravityCompat.START)
+            WebWindowActivity.open(this, "https://nxmirror.netlify.app/")
+        }
+
         // Terminal view config + extra keys wiring
         binding.terminal.volumeKeysEnabled = true
         binding.terminal.onTerminalLinkClick = ::openTerminalLink
