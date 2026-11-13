@@ -507,6 +507,18 @@
                     <TextView style="@style/Text.Noxs.NavLabel" android:text="@string/nav_terminal" />
                 </LinearLayout>
                 <LinearLayout
+                    android:id="@+id/nav_mirror_account"
+                    style="@style/Text.Noxs.NavRow">
+                    <ImageView style="@style/Text.Noxs.NavIcon" android:src="@drawable/ic_nav_users" android:contentDescription="@string/nav_mirror_account" />
+                    <TextView style="@style/Text.Noxs.NavLabel" android:text="@string/nav_mirror_account" />
+                </LinearLayout>
+                <LinearLayout
+                    android:id="@+id/nav_git"
+                    style="@style/Text.Noxs.NavRow">
+                    <ImageView style="@style/Text.Noxs.NavIcon" android:src="@drawable/ic_nav_packages" android:contentDescription="@string/nav_git" />
+                    <TextView style="@style/Text.Noxs.NavLabel" android:text="@string/nav_git" />
+                </LinearLayout>
+                <LinearLayout
                     android:id="@+id/nav_noxos"
                     style="@style/Text.Noxs.NavRow">
                     <ImageView style="@style/Text.Noxs.NavIcon" android:src="@drawable/ic_nav_noxos" android:contentDescription="@string/nav_noxos" />
