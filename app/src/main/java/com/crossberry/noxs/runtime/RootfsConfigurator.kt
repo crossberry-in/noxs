@@ -173,7 +173,7 @@ object RootfsConfigurator {
         nx.setExecutable(true, false)
 
         val nxc = File(rootfs, "usr/local/bin/nxc")
-        writeFile(nxc, NoxsNxCloud.CLI)
+        writeFile(nxc, NoxsNxCloud.CLOUD_CLI)
         nxc.setExecutable(true, false)
 
         val libDir = File(rootfs, "usr/local/lib/noxs-pkg")
