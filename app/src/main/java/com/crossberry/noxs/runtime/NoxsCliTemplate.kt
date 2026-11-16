@@ -950,14 +950,14 @@ sms_usage() {
     cat <<'HELP'
 Usage: noxs sms [command]
   status                      Capability summary (no private data is read)
-  permission                  Ask for the SEND_SMS runtime permission
-  send <number> <message...>  Send ONE message after an explicit
-                              confirmation dialog (SEND_SMS permission)
+  send <number> <message...>  Opens YOUR SMS app with the message prefilled —
+                              press send there to deliver (no permission used)
   compose <number> <message...>
-                              Open the system SMS app — final approval there
+                              Same flow — system SMS app, final approval there
   contacts                    Pick a contact (no permission needed)
 
-Noxs never reads messages and never sends automatically or in bulk.
+Noxs never reads messages, never sends automatically or in bulk, and
+holds no SMS permission at all.
 HELP
 }
 
@@ -966,7 +966,6 @@ sms_command() {
     case "${'$'}action" in
         help|--help|-h) sms_usage ;;
         ""|status) bridge_request sms-status ;;
-        permission) bridge_request perm-request sms ;;
         contacts) bridge_request sms-contacts ;;
         send|compose)
             local number="${'$'}{2:-}"

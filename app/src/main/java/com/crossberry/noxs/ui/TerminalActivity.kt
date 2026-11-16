@@ -1210,10 +1210,6 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
             return
         }
         when (pending.kind) {
-            "sms-send" -> {
-                val number = pending.args.getOrNull(0).orEmpty()
-                completeBridgeRequest(pending.requestId, androidBridge.sendSms(number, pending.text))
-            }
             "camera" -> {
                 // The grant was collected first — now actually open the camera.
                 launchBridgeCamera(
@@ -1239,21 +1235,10 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
             .setTitle("Send SMS via Noxs")
             .setMessage("To: $number\n\n${message.take(1200)}")
             .setPositiveButton("Send now") { _, _ ->
-                val perm = NoxsAndroidPermissions.Perm.SMS
-                if (NoxsAndroidPermissions.isGranted(this, perm)) {
-                    pendingBridgeUi = null
-                    lifecycleScope.launch {
-                        val result = withContext(Dispatchers.IO) { androidBridge.sendSms(number, message) }
-                        completeBridgeRequest(request.id, result)
-                    }
-                } else {
-                    // Keep pendingBridgeUi; onBridgePermissionsResult completes with the send.
-                    runCatching {
-                        bridgePermLauncher.launch(NoxsAndroidPermissions.requestList(perm).toTypedArray())
-                    }.getOrElse {
-                        pendingBridgeUi = null
-                        completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "Permission dialog unavailable"))
-                    }
+                pendingBridgeUi = null
+                lifecycleScope.launch {
+                    val result = withContext(Dispatchers.IO) { androidBridge.sendSms(number, message) }
+                    completeBridgeRequest(request.id, result)
                 }
             }
             .setNegativeButton("Cancel") { _, _ ->

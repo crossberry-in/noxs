@@ -217,8 +217,7 @@ object NoxsPermissionCatalog {
             id = "android.sms.send",
             group = GROUP_ANDROID,
             level = Level.OPTIONAL,
-            description = "Send a single SMS from the terminal after an explicit confirmation dialog. Never automatic, never bulk; compose mode uses the system SMS app without this grant.",
-            androidPermission = "android.permission.SEND_SMS"
+            description = "Hands the message to your own SMS app — you press send there. Never automatic, never bulk; Noxs requests no SMS permission at all."
         ),
         Permission(
             id = "android.storage.mount",

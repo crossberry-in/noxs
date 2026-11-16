@@ -19,9 +19,10 @@
  *    dirs refuse symlinks (same hardening as the storage bridge)
  *  - device/network reports are non-identifying summaries — no IMSI, no
  *    phone number, no SSID, no credentials
- *  - SMS sending requires (1) the Android SEND_SMS runtime grant, (2) an
- *    explicit in-app confirmation dialog showing recipient + message, and
- *    the compose path uses the system SMS app for final user approval
+ *  - SMS messages are handed to the system SMS app (composer intent): the
+ *    user presses send in their own messaging app, so Noxs holds NO direct
+ *    SMS permission at all; the flow still shows an explicit in-app
+ *    confirmation dialog with recipient + message first
  *  - operations that need UI (pickers, camera, confirmations) are executed
  *    by the foreground TerminalActivity; the bridge itself never starts
  *    activities from the background
@@ -46,7 +47,6 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.Environment
 import android.os.StatFs
-import android.telephony.SmsManager
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -392,9 +392,8 @@ class NoxsAndroidBridgeHost(private val context: Context, private val paths: Nox
 
     private fun smsStatus(): NoxsAndroidBridge.CommandResult = ok(
         buildString {
-            appendLine(NoxsAndroidPermissions.statusText(appContext, NoxsAndroidPermissions.Perm.SMS))
+            appendLine("sms: no SMS permission held — sending goes through YOUR SMS app")
             appendLine("Compose via system SMS app: always available (no permission needed)")
-            appendLine("Direct send requires your explicit confirmation dialog before every message.")
             appendLine("Noxs never reads messages and never sends automatically or in bulk.")
         }.trimEnd()
     )
@@ -412,29 +411,14 @@ class NoxsAndroidBridgeHost(private val context: Context, private val paths: Nox
 
     // ----------------------------------------------------------- helpers
 
-    /** Sends an SMS after the foreground activity collected explicit consent. */
+    /** Opens the system SMS app with the message prefilled — the user sends
+     *  it there, so Noxs needs no SMS permission at all. */
     fun sendSms(number: String, message: String): NoxsAndroidBridge.CommandResult {
         if (number.isBlank() || message.isEmpty()) return err("Recipient and message are required")
-        val granted = ContextCompat.checkSelfPermission(
-            appContext, "android.permission.SEND_SMS"
-        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (!granted) return err("SEND_SMS permission not granted — run: noxs sms permission, then retry")
         return runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val sm = appContext.getSystemService(SmsManager::class.java)
-                    ?: SmsManager.getDefault()
-                sm.sendMultipartTextMessage(
-                    number, null,
-                    sm.divideMessage(message.take(1600)),
-                    null, null
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                val sm = SmsManager.getDefault()
-                sm.sendMultipartTextMessage(number, null, sm.divideMessage(message.take(1600)), null, null)
-            }
-            ok("SMS queued to the radio for $number (${message.length} chars)")
-        }.getOrElse { err("SMS send failed: ${it.message?.take(160) ?: "unknown error"}") }
+            appContext.startActivity(smsComposeIntent(number, message))
+            ok("Opened the SMS app — press send there to deliver the message to $number")
+        }.getOrElse { err("SMS app unavailable: ${it.message?.take(160) ?: "unknown error"}") }
     }
 
     /** System SMS composer — final approval ALWAYS happens in the SMS app. */

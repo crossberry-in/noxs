@@ -21,8 +21,9 @@
         media         photo picker / gallery import (READ_MEDIA_* on 33+,
                       legacy READ/WRITE_EXTERNAL_STORAGE on 32-)
         camera        noxs camera (runtime grant before the camera app opens)
-        sms           noxs sms send (explicit confirmation dialog + runtime
-                      grant; compose always uses the system SMS app instead)
+        sms           noxs sms hands the message to the system SMS app;
+                      the user presses send there, so NO SMS permission
+                      is requested or needed
         all-files     OPT-IN direct shared-storage mount (noxs storage mount +
                       noxs storage grant direct). User-approved in Android
                       Settings, default off. Without it Noxs stays SAF-only.
@@ -39,7 +40,6 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />

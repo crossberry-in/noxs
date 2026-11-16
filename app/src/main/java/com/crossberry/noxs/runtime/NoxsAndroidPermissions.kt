@@ -45,11 +45,6 @@ object NoxsAndroidPermissions {
             "Camera",
             listOf(Manifest.permission.CAMERA)
         ),
-        SMS(
-            "sms",
-            "SMS sending",
-            listOf(Manifest.permission.SEND_SMS)
-        ),
         NOTIFICATIONS(
             "notifications",
             "Notifications",

@@ -50,8 +50,8 @@ nx <cmd> == noxs <cmd>
 | `nx document export <file> [name] [mime]` | Save a Noxs file anywhere through the system save dialog | none |
 | `nx document gallery [dest]` | Android **Photo Picker** → file in the guest home | none (photo picker is permissionless) |
 | `nx document picker [dest]` | Pick one document into the guest home | none |
-| `nx sms status` / `permission` | Capability summary / runtime permission request | SEND_SMS (only for direct send) |
-| `nx sms send <num> <msg>` | One message after an explicit confirmation dialog | SEND_SMS + in-app confirm |
+| `nx sms status` | Capability summary — Noxs holds NO SMS permission | none |
+| `nx sms send <num> <msg>` | In-app confirm dialog, then YOUR SMS app opens with the message prefilled — you press send | none (system SMS app) |
 | `nx sms compose <num> <msg>` | System SMS app — final approval happens there | none |
 | `nx sms contacts` | Contact picker (returns the name, no numbers reading) | none (ACTION_PICK) |
 | `nx device info/battery/storage` | Non-identifying device report | none |
@@ -110,8 +110,9 @@ the two user actions above do, and Noxs reports exactly which one is missing.
 6. Kali/legacy environment access — same flow in the legacy environment.
 7. Terminal restart persistence — kill the app, reopen: mount still applied,
    SAF mappings still usable (`nx storage status`).
-8. SMS permission and confirmation — `nx sms send` shows the dialog; cancel
-   sends nothing; `nx sms compose` opens the SMS app untouched.
+8. SMS via your own SMS app — `nx sms send` confirms in-app, then opens the
+   messaging app with the message prefilled; you press send there. Noxs holds
+   no SMS permission at all.
 9. Android 13–15 compatibility — media permissions path (33+), legacy path
    (32-), POST_NOTIFICATIONS behavior on both sides of API 33.
 10. Permission revocation — revoke in Android Settings → `nx storage status`
