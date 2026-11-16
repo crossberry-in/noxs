@@ -302,11 +302,12 @@ class StorageActivity : AppCompatActivity() {
                     title = "${perm.label}: ${state.substringAfter(": ")}",
                     subtitle = "Tap to request through Android's own permission dialog (used by nx document/sms/camera)",
                     onClick = {
-                        runCatching {
-                            com.crossberry.noxs.runtime.NoxsAndroidPermissions.requestList(perm).takeIf { it.isNotEmpty() }
-                        }?.let { grants ->
+                        val grants = com.crossberry.noxs.runtime.NoxsAndroidPermissions.requestList(perm)
+                        if (grants.isNotEmpty()) {
                             requestIntegrationPermissionsLauncher.launch(grants.toTypedArray())
-                        } ?: Toast.makeText(this@StorageActivity, state, Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(this@StorageActivity, state, Toast.LENGTH_SHORT).show()
+                        }
                     }
                 )
             )
