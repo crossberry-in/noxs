@@ -1,0 +1,53 @@
+{
+  "schema": "noxs.apis/1.0",
+  "description": "Programmatic surfaces exposed by Noxs. Only interfaces that exist in the source are listed. The Android bridge wire protocol is the documented integration point for plugins and the NX API SDK.",
+  "apis": [
+    {
+      "id": "noxs-android-bridge",
+      "name": "NX Android Bridge (file-based IPC)",
+      "kind": "ipc",
+      "description": "Request/response file protocol between the Linux guest and the Android app. Operations: ui-files, ui-storage, open-url, doc-open/import/export/gallery/pick, camera, share-file/text, sms-send/compose/contacts, notify-permission, notify-status, notify-post, perm-request, perm-status, device-info, device-battery, device-storage, net-status, clip-get, clip-set, sms-status, mount-status, mount-on, mount-off, mount-grant, app-version.",
+      "binding": "/var/run/noxs/host/android/{requests,responses,payloads,response-payloads}",
+      "request_format": "line 1 = operation, lines 2-6 = positional args; optional payload file with the same request id",
+      "response_format": "OK/ERR line followed by text",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/runtime/NoxsAndroidBridge.kt"],
+      "documentation_route": "android/overview/"
+    },
+    {
+      "id": "noxs-storage-bridge",
+      "name": "Noxs SAF Storage Bridge (file-based IPC)",
+      "kind": "ipc",
+      "description": "SAF-backed storage operations: status, repair, list, mkdir, read/get, write/put, delete, copy, move, setup, map, reset.",
+      "binding": "/var/run/noxs/host/storage/{requests,responses,payloads,response-payloads}",
+      "request_format": "operation, category, path, argument lines; optional staged payload",
+      "response_format": "OK/ERR line followed by text (read/get stage bytes in response-payloads)",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/runtime/NoxsStorageBridge.kt"],
+      "documentation_route": "files/storage-access/"
+    },
+    {
+      "id": "nx-api-sdk",
+      "name": "@noxs/nx-api SDK (JavaScript)",
+      "kind": "guest-library",
+      "description": "JavaScript SDK installed into the environment at /usr/local/lib/noxs/nx-api for NX packages to call Noxs capabilities.",
+      "binding": "/usr/local/lib/noxs/nx-api/nx-api.js",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/runtime/NoxsNxApiTemplate.kt"],
+      "documentation_route": "reference/sdk-reference/"
+    },
+    {
+      "id": "documents-provider",
+      "name": "NoxsDocumentsProvider (Android DocumentsProvider)",
+      "kind": "android-provider",
+      "description": "Exposes the Noxs Linux home to Android document UIs (system file picker, other apps' Save/Open dialogs).",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/runtime/NoxsDocumentsProvider.kt"],
+      "documentation_route": "files/file-browser/"
+    },
+    {
+      "id": "url-guard",
+      "name": "NoxsUrlGuard (URL policy)",
+      "kind": "internal",
+      "description": "Single validation point for every URL that reaches a Noxs WebView (http/https only, blocked-scheme re-check after parsing, length cap). Used by 'nx ow' and 'noxs docs'.",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/runtime/NoxsUrlGuard.kt"],
+      "documentation_route": "architecture/security/"
+    }
+  ]
+}

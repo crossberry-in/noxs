@@ -1,0 +1,160 @@
+{
+  "schema": "noxs.features/1.0",
+  "description": "Feature registry for documentation coverage checks. Status values: implemented (shipped and verified), experimental (works but with real limitations), planned (not implemented — must never be documented as available). Ubuntu 24.04 LTS ARM64 is the one installable Noxs environment (BuiltinProviders: 'no distribution selector and no Debian fallback'); Kali and the legacy Debian import are model-level concepts only.",
+  "features": [
+    {
+      "id": "terminal",
+      "name": "Terminal emulator (Ubuntu 24.04 LTS ARM64)",
+      "description": "Multi-session terminal on proot Ubuntu 24.04 LTS; primary Noxs environment.",
+      "status": "implemented",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/ui/TerminalActivity.kt", "app/src/main/java/com/crossberry/noxs/runtime/ProotLauncher.kt"],
+      "platform_support": ["ubuntu"],
+      "permissions": [],
+      "related_apis": [],
+      "documentation_page": "terminal/terminal-interface/"
+    },
+    {
+      "id": "kali-environment",
+      "name": "Kali Linux ARM64 environment",
+      "description": "Referenced by the environment variant model (Kali full/minimal/nano) but NO provider, installer or rootfs pipeline exists yet. Never document Kali as installable.",
+      "status": "planned",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/environments/model/EnvironmentModels.kt"],
+      "platform_support": ["kali"],
+      "permissions": [],
+      "related_apis": [],
+      "documentation_page": "environments/kali-installation/"
+    },
+    {
+      "id": "saf-storage",
+      "name": "SAF storage access (7 categories)",
+      "description": "Per-category SAF document-tree access: shared, downloads, dcim, pictures, music, movies, documents. Command-based; never presented as a POSIX mount.",
+      "status": "implemented",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/runtime/NoxsStorageBridge.kt", "app/src/main/java/com/crossberry/noxs/runtime/NoxsCliTemplate.kt"],
+      "platform_support": ["ubuntu"],
+      "permissions": [],
+      "related_apis": ["noxs-storage-bridge"],
+      "documentation_page": "files/storage-access/"
+    },
+    {
+      "id": "direct-storage-mount",
+      "name": "Opt-in direct /sdcard mount",
+      "description": "MANAGE_EXTERNAL_STORAGE (user-approved in Android Settings) + explicit 'noxs storage mount' toggle expose /sdcard and ~/storage/* links in NEW sessions. Default off; SAF stays the recommended model.",
+      "status": "implemented",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/runtime/NoxsStorageMount.kt", "app/src/main/java/com/crossberry/noxs/ui/StorageActivity.kt"],
+      "platform_support": ["ubuntu"],
+      "permissions": ["MANAGE_EXTERNAL_STORAGE"],
+      "related_apis": ["noxs-android-bridge"],
+      "documentation_page": "android/external-sdcard/"
+    },
+    {
+      "id": "documents-provider-ui",
+      "name": "Documents provider + file browser UI",
+      "description": "NoxsDocumentsProvider exposes the Linux home to Android document UIs; FileBrowserActivity browses Linux home and SAF-backed folders.",
+      "status": "implemented",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/runtime/NoxsDocumentsProvider.kt", "app/src/main/java/com/crossberry/noxs/ui/FileBrowserActivity.kt"],
+      "platform_support": ["ubuntu"],
+      "permissions": [],
+      "related_apis": [],
+      "documentation_page": "files/file-browser/"
+    },
+    {
+      "id": "android-bridge",
+      "name": "NX Android Integration bridge",
+      "description": "File-based request/response IPC for files/document/sms/device/notification/share/camera/clipboard/network/storage-mount plus app-version and open-url deep links.",
+      "status": "implemented",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/runtime/NoxsAndroidBridge.kt", "app/src/main/java/com/crossberry/noxs/ui/TerminalActivity.kt"],
+      "platform_support": ["ubuntu"],
+      "permissions": ["POST_NOTIFICATIONS", "CAMERA", "READ_MEDIA_IMAGES", "READ_MEDIA_VIDEO", "READ_MEDIA_AUDIO"],
+      "related_apis": ["noxs-android-bridge"],
+      "documentation_page": "android/overview/"
+    },
+    {
+      "id": "nx-package-system",
+      "name": "NX Package System",
+      "description": "nx pkg init/build/release/deploy + mirror-first installer with sha256 caching; language templates for node, rust, cpp, python, go.",
+      "status": "implemented",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/runtime/NoxsNxPkgManager.kt", "app/src/main/java/com/crossberry/noxs/runtime/NoxsNxTemplate.kt"],
+      "platform_support": ["ubuntu"],
+      "permissions": [],
+      "related_apis": ["nx-api-sdk"],
+      "documentation_page": "packages/package-manager/"
+    },
+    {
+      "id": "plugin-system",
+      "name": "Plugin system + Plugin Store",
+      "description": "Manifest-validated plugins with explicit permission boundaries; nx plug store UI.",
+      "status": "implemented",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/runtime/plugins/", "app/src/main/java/com/crossberry/noxs/ui/PluginStoreActivity.kt"],
+      "platform_support": ["ubuntu"],
+      "permissions": [],
+      "related_apis": [],
+      "documentation_page": "plugins/plugin-sdk/"
+    },
+    {
+      "id": "nx-ai",
+      "name": "NX AI agent",
+      "description": "Guest-side AI agent (ai-lib.sh + NoxsNxAiAgent); provider configured by the user, API keys never printed.",
+      "status": "implemented",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/runtime/NoxsNxAiAgent.kt", "app/src/main/java/com/crossberry/noxs/runtime/NoxsNxAiLib.kt"],
+      "platform_support": ["ubuntu"],
+      "permissions": [],
+      "related_apis": [],
+      "documentation_page": "ai/nx-ai/"
+    },
+    {
+      "id": "code-server",
+      "name": "VS Code (code-server)",
+      "description": "Local-only code-server lifecycle driven by the CLI and the Noxs editor screen.",
+      "status": "implemented",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/runtime/CodeServerManager.kt"],
+      "platform_support": ["ubuntu"],
+      "permissions": [],
+      "related_apis": [],
+      "documentation_page": "devtools/code-server/"
+    },
+    {
+      "id": "docker-compat",
+      "name": "Docker compatibility mode",
+      "description": "Docker daemon inside proot; container execution is kernel-dependent and honestly reported by 'noxs docker test'.",
+      "status": "experimental",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/runtime/NoxsDockerSetup.kt", "app/src/main/java/com/crossberry/noxs/runtime/NoxsDockerCompat.kt"],
+      "platform_support": ["ubuntu"],
+      "permissions": [],
+      "related_apis": [],
+      "documentation_page": "devtools/workflows/"
+    },
+    {
+      "id": "tor-vpn",
+      "name": "Tor over PRoot (nx vpn)",
+      "description": "Guest-side Tor routing for new shells; network paths remain subject to proot/Android limits.",
+      "status": "experimental",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/runtime/NoxsNxVpnLib.kt"],
+      "platform_support": ["ubuntu"],
+      "permissions": [],
+      "related_apis": [],
+      "documentation_page": "troubleshooting/network-errors/"
+    },
+    {
+      "id": "noxos-emulator",
+      "name": "NoxOS emulator screen (QEMU/VNC)",
+      "description": "Experimental screen for the separate private NoxOS project; NOT part of the Noxs terminal product. Do not document as a Noxs feature.",
+      "status": "experimental",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/emulator/"],
+      "platform_support": ["ubuntu"],
+      "permissions": [],
+      "related_apis": [],
+      "documentation_page": "architecture/noxos-emulator/"
+    },
+    {
+      "id": "legacy-debian-import",
+      "name": "Legacy Debian environment import",
+      "description": "Pre-migration Debian installs are imported read-only by NoxsEnvironmentManager (never erased, user data kept). Not a provider; fresh installs are always Ubuntu.",
+      "status": "implemented",
+      "source_files": ["app/src/main/java/com/crossberry/noxs/environments/NoxsEnvironmentManager.kt"],
+      "platform_support": ["ubuntu"],
+      "permissions": [],
+      "related_apis": [],
+      "documentation_page": "environments/rootfs-management/"
+    }
+  ]
+}

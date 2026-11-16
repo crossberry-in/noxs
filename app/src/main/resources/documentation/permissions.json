@@ -1,0 +1,86 @@
+{
+  "schema": "noxs.permissions/1.0",
+  "description": "Android permission registry, mirrored from app/src/main/AndroidManifest.xml. Every entry documents why the permission exists and how the user stays in control. Noxs never requests permissions at startup; capability commands ask at use time.",
+  "permissions": [
+    {
+      "name": "INTERNET",
+      "type": "normal",
+      "purpose": "Rootfs download, APT, code-server, NX package system, AI providers.",
+      "user_control": "Standard Android permission; no user action required.",
+      "documentation_route": "android/app-permissions/"
+    },
+    {
+      "name": "ACCESS_NETWORK_STATE",
+      "type": "normal",
+      "purpose": "Connectivity summary for 'noxs network status' and download pre-checks.",
+      "user_control": "Standard Android permission.",
+      "documentation_route": "android/overview/"
+    },
+    {
+      "name": "FOREGROUND_SERVICE / FOREGROUND_SERVICE_DATA_SYNC",
+      "type": "normal",
+      "purpose": "Keeps the terminal/runtime service alive during installs and long transfers.",
+      "user_control": "Notification shown while the service runs.",
+      "documentation_route": "android/background-execution/"
+    },
+    {
+      "name": "WAKE_LOCK / VIBRATE",
+      "type": "normal",
+      "purpose": "Reliable long-running installs and terminal feedback.",
+      "user_control": "Standard Android permission.",
+      "documentation_route": "android/background-execution/"
+    },
+    {
+      "name": "POST_NOTIFICATIONS",
+      "type": "runtime",
+      "min_sdk": 33,
+      "purpose": "Terminal notifications and 'noxs notification post'.",
+      "user_control": "Asked when the user posts or taps 'noxs notification permission'.",
+      "documentation_route": "android/notifications/"
+    },
+    {
+      "name": "READ_MEDIA_IMAGES / READ_MEDIA_VIDEO / READ_MEDIA_AUDIO",
+      "type": "runtime",
+      "min_sdk": 33,
+      "purpose": "Gallery import ('noxs document gallery') and media access via the Android bridge.",
+      "user_control": "Asked on first use of the matching command; revocable in Settings.",
+      "documentation_route": "android/app-permissions/"
+    },
+    {
+      "name": "READ_EXTERNAL_STORAGE / WRITE_EXTERNAL_STORAGE",
+      "type": "runtime-legacy",
+      "max_sdk": 29,
+      "purpose": "Legacy direct-storage path on old Android versions only.",
+      "user_control": "Asked at use time; SAF is preferred on every supported version.",
+      "documentation_route": "android/storage-permissions/"
+    },
+    {
+      "name": "CAMERA",
+      "type": "runtime",
+      "purpose": "'noxs camera' photo capture.",
+      "user_control": "Asked right before the camera opens; revocable in Settings.",
+      "documentation_route": "android/gallery/"
+    },
+    {
+      "name": "MANAGE_EXTERNAL_STORAGE",
+      "type": "special-access",
+      "purpose": "OPT-IN direct /sdcard mount ('noxs storage grant --direct' + 'noxs storage mount'). NOT used for normal operation; SAF is the recommended model.",
+      "user_control": "User-approved in Android's own All-files-access screen; default off; revocable from either side at any time.",
+      "documentation_route": "android/external-sdcard/"
+    },
+    {
+      "name": "MANAGE_DOCUMENTS",
+      "type": "provider-access",
+      "purpose": "android:permission attribute on the NoxsDocumentsProvider element — the platform standard for document providers. It lets Android's own file UIs browse the Noxs Linux home; it grants Noxs nothing extra.",
+      "user_control": "Access happens only through Android's document UIs; no runtime dialog involved.",
+      "documentation_route": "files/file-browser/"
+    },
+    {
+      "name": "SMS (none requested)",
+      "type": "not-requested",
+      "purpose": "Noxs holds NO SMS permission. Sending hands the message to the system SMS app where the user presses send; contacts are picked through Android's own picker.",
+      "user_control": "Final approval always happens outside Noxs.",
+      "documentation_route": "android/app-permissions/"
+    }
+  ]
+}
