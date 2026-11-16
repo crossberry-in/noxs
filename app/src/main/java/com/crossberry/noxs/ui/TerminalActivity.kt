@@ -46,12 +46,16 @@ import com.crossberry.noxs.runtime.AndroidProcSource
 import com.crossberry.noxs.runtime.NoxsActivityCenter
 import com.crossberry.noxs.runtime.NoxsActivityRecord
 import com.crossberry.noxs.runtime.NoxsAptSetup
+import com.crossberry.noxs.runtime.NoxsAndroidBridge
+import com.crossberry.noxs.runtime.NoxsAndroidBridgeHost
+import com.crossberry.noxs.runtime.NoxsAndroidPermissions
 import com.crossberry.noxs.runtime.NoxsPaths
 import com.crossberry.noxs.runtime.NoxsProcSampler
 import com.crossberry.noxs.runtime.NoxsResources
 import com.crossberry.noxs.runtime.NoxsService
 import com.crossberry.noxs.runtime.NoxsSessionManager
 import com.crossberry.noxs.runtime.NoxsStorageBridge
+import com.crossberry.noxs.runtime.NoxsStorageMount
 import com.crossberry.noxs.runtime.NoxsTreeUsage
 import com.crossberry.noxs.runtime.RuntimeHolder
 import com.crossberry.noxs.terminal.emulator.TerminalSession
@@ -63,6 +67,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
 
 class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
 
@@ -72,9 +78,27 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
     private var sessionManager: NoxsSessionManager? = null
     private lateinit var storageBridge: NoxsStorageBridge
     private lateinit var storagePickerLauncher: ActivityResultLauncher<Intent>
+    private lateinit var bridgeSystemUiLauncher: ActivityResultLauncher<Intent>
+    private lateinit var bridgePhotoLauncher: ActivityResultLauncher<androidx.activity.result.PickVisualMediaRequest>
+    private lateinit var bridgePermLauncher: ActivityResultLauncher<Array<String>>
     private var storageObserver: FileObserver? = null
     private var storageObservedPath: String? = null
     private var pendingStorageAction: PendingStorageAction? = null
+
+    // NX Android Bridge (document/sms/device/notification/... commands)
+    private lateinit var androidBridge: NoxsAndroidBridgeHost
+    private var bridgeObserver: FileObserver? = null
+    private var bridgeObservedPath: String? = null
+    private var pendingBridgeUi: PendingBridgeUi? = null
+    private var bridgeCameraOutput: File? = null
+    private var bridgeCancelRequested = false
+
+    private data class PendingBridgeUi(
+        val requestId: String,
+        val kind: String,
+        val args: List<String>,
+        val text: String = ""
+    )
     /** User-defined order for session chips; labels are unique per session. */
     private val sessionDisplayOrder = mutableListOf<String>()
 
@@ -114,12 +138,22 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
         storagePickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             onStoragePickerResult(result)
         }
+        bridgeSystemUiLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            onBridgeSystemUiResult(result)
+        }
+        bridgePhotoLauncher = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            onBridgePhotoPicked(uri)
+        }
+        bridgePermLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+            onBridgePermissionsResult(grants)
+        }
         binding = ActivityTerminalBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         val app = application as com.crossberry.noxs.NoxsApplication
         paths = app.environments.activePaths()
         storageBridge = NoxsStorageBridge(this, paths)
+        androidBridge = NoxsAndroidBridgeHost(this, paths)
         val savedStorageRequest = savedInstanceState?.getString(STATE_STORAGE_REQUEST_ID)
         val savedStorageCategory = savedInstanceState?.getString(STATE_STORAGE_CATEGORY)?.let { NoxsStorageBridge.Category.fromKey(it) }
         if (savedStorageRequest != null && savedStorageCategory != null) {
@@ -715,7 +749,10 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
 
     override fun onStart() {
         super.onStart()
-        if (::storageBridge.isInitialized && paths.isInstalled()) startStorageObserver()
+        if (::storageBridge.isInitialized && paths.isInstalled()) {
+            startStorageObserver()
+            startBridgeObserver()
+        }
     }
 
     override fun onStop() {
@@ -724,6 +761,9 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
         storageObserver?.stopWatching()
         storageObserver = null
         storageObservedPath = null
+        bridgeObserver?.stopWatching()
+        bridgeObserver = null
+        bridgeObservedPath = null
         super.onStop()
     }
 
@@ -953,6 +993,568 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
         val mode = android.system.Os.lstat(file.absolutePath).st_mode
         (mode and android.system.OsConstants.S_IFMT) == android.system.OsConstants.S_IFLNK
     }.getOrDefault(false)
+
+    // ======================================================== NX Android Bridge
+    // Serves /var/run/noxs/host/android requests written by the guest CLI
+    // (noxs document | sms | device | notification | share | camera |
+    // clipboard | network | files | storage mount ...). UI operations run
+    // here in the foreground activity; everything else goes to the bridge host.
+
+    private fun startBridgeObserver() {
+        val recreated = runCatching { androidBridge.ensureControlDirectories() }.getOrElse { return }
+        androidBridge.cleanupStaleTransfers()
+        armBridgeObserver(force = recreated)
+        processPendingBridgeRequests()
+    }
+
+    private fun armBridgeObserver(force: Boolean) {
+        val path = paths.bridgeRequests.absolutePath
+        if (!force && bridgeObserver != null && bridgeObservedPath == path) return
+        bridgeObserver?.stopWatching()
+        bridgeObserver = null
+        bridgeObservedPath = null
+        val requestMask = FileObserver.CLOSE_WRITE or FileObserver.MOVED_TO
+        val dirInvalid = FileObserver.DELETE_SELF or FileObserver.MOVE_SELF
+        val observer = object : FileObserver(path, requestMask or dirInvalid) {
+            override fun onEvent(event: Int, name: String?) {
+                if ((event and dirInvalid) != 0) {
+                    runOnUiThread {
+                        bridgeObserver?.stopWatching()
+                        bridgeObserver = null
+                        bridgeObservedPath = null
+                        startBridgeObserver()
+                    }
+                    return
+                }
+                if (name == null || (event and requestMask) == 0) return
+                runOnUiThread { processPendingBridgeRequests() }
+            }
+        }
+        runCatching { observer.startWatching() }.onSuccess {
+            bridgeObserver = observer
+            bridgeObservedPath = path
+        }
+    }
+
+    private fun processPendingBridgeRequests() {
+        runCatching { androidBridge.ensureControlDirectories() }.getOrElse { return }
+        if (pendingBridgeUi != null) return
+        val pendingFiles = paths.bridgeRequests.listFiles().orEmpty()
+        pendingFiles.filter(::isSymbolicLink).forEach { it.delete() }
+        val request = pendingFiles
+            .filter { it.isFile && !isSymbolicLink(it) }
+            .sortedBy { it.lastModified() }
+            .firstOrNull() ?: return
+        val requestId = request.name
+        if (!requestId.matches(Regex("[A-Za-z0-9._-]{1,120}"))) {
+            request.delete()
+            return
+        }
+        val lines = runCatching { request.readLines(Charsets.UTF_8) }.getOrDefault(emptyList())
+        request.delete()
+        val parsed = NoxsAndroidBridge.parseRequest(requestId, lines)
+
+        if (NoxsAndroidBridge.needsUi(parsed.operation)) {
+            handleBridgeUi(parsed)
+            return
+        }
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { androidBridge.execute(parsed) }
+                    .getOrElse { NoxsAndroidBridge.CommandResult(false, it.message ?: "bridge failure") }
+            }
+            completeBridgeRequest(requestId, result)
+        }
+    }
+
+    private fun completeBridgeRequest(requestId: String, result: NoxsAndroidBridge.CommandResult) {
+        if (!requestId.matches(Regex("[A-Za-z0-9._-]{1,120}"))) return
+        runCatching { androidBridge.ensureControlDirectories() }.getOrElse { return }
+        val response = File(paths.bridgeResponses, requestId)
+        val temporary = File(paths.bridgeResponses, "$requestId.${java.util.UUID.randomUUID()}.tmp")
+        runCatching {
+            paths.bridgeResponses.mkdirs()
+            temporary.writeText("${if (result.ok) "OK" else "ERR"}\n${result.output.trimEnd()}\n", Charsets.UTF_8)
+            if (isSymbolicLink(response)) response.delete()
+            if (response.exists() && !response.delete()) { temporary.delete(); return@runCatching }
+            if (!temporary.renameTo(response)) temporary.delete()
+        }
+        if (pendingBridgeUi?.requestId == requestId) pendingBridgeUi = null
+        if (bridgeObserver != null) processPendingBridgeRequests()
+    }
+
+    // ------------------------------------------------------- UI operations
+
+    private fun handleBridgeUi(request: NoxsAndroidBridge.Request) {
+        val message = if (
+            request.operation == "sms-send" || request.operation == "sms-compose" ||
+            request.operation == "share-text" || request.operation == "notify-post"
+        ) androidBridge.payloadText(request) else ""
+        pendingBridgeUi = PendingBridgeUi(request.id, request.operation, request.args, message)
+        when (request.operation) {
+            "ui-files" -> {
+                pendingBridgeUi = null
+                startActivity(Intent(this, FileBrowserActivity::class.java))
+                completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(true, "Noxs file browser opened"))
+            }
+            "ui-storage" -> {
+                pendingBridgeUi = null
+                startActivity(Intent(this, StorageActivity::class.java))
+                completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(true, "Noxs storage dashboard opened"))
+            }
+            "doc-open", "doc-pick" -> launchBridgeDocumentPick(request, multi = request.operation == "doc-pick")
+            "doc-import" -> launchBridgeDocumentPick(request, multi = true)
+            "doc-export" -> launchBridgeExport(request)
+            "doc-gallery" -> {
+                runCatching {
+                    bridgePhotoLauncher.launch(
+                        androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                }.getOrElse {
+                    pendingBridgeUi = null
+                    completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "Photo picker unavailable on this device"))
+                }
+            }
+            "camera" -> launchBridgeCamera(request)
+            "share-text" -> {
+                pendingBridgeUi = null
+                val text = message.ifEmpty { request.arg(1) }
+                if (text.isEmpty()) {
+                    completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "No text to share"))
+                } else {
+                    runCatching { startActivity(androidBridge.shareTextIntent(text, null)) }
+                        .onSuccess {
+                            completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(true, "Sharesheet opened"))
+                        }
+                        .onFailure {
+                            completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "Could not open the sharesheet"))
+                        }
+                }
+            }
+            "share-file" -> launchBridgeShareFile(request)
+            "sms-compose" -> {
+                pendingBridgeUi = null
+                val number = request.arg(1)
+                runCatching { startActivity(androidBridge.smsComposeIntent(number, message)) }
+                    .onSuccess {
+                        completeBridgeRequest(
+                            request.id,
+                            NoxsAndroidBridge.CommandResult(true, "System SMS app opened — send from there for final approval")
+                        )
+                    }
+                    .onFailure {
+                        completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "No SMS app available on this device"))
+                    }
+            }
+            "sms-contacts" -> {
+                runCatching {
+                    bridgeSystemUiLauncher.launch(
+                        Intent(Intent.ACTION_PICK, android.provider.ContactsContract.Contacts.CONTENT_URI)
+                    )
+                }.getOrElse {
+                    pendingBridgeUi = null
+                    completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "Contacts app unavailable"))
+                }
+            }
+            "sms-send" -> confirmBridgeSmsSend(request, message)
+            "notify-permission" -> requestBridgePermissions(
+                request, NoxsAndroidPermissions.Perm.NOTIFICATIONS
+            )
+            "perm-request" -> {
+                val perm = NoxsAndroidPermissions.Perm.values().firstOrNull { it.id == request.arg(1) }
+                if (perm == null) {
+                    pendingBridgeUi = null
+                    completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "Unknown capability: ${request.arg(1)}"))
+                } else requestBridgePermissions(request, perm)
+            }
+            "mount-grant" -> {
+                runCatching {
+                    bridgeSystemUiLauncher.launch(
+                        Intent(NoxsAndroidPermissions.ALL_FILES_ACTION, Uri.parse("package:$packageName"))
+                    )
+                }.getOrElse {
+                    pendingBridgeUi = null
+                    completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "All-files-access screen unavailable"))
+                }
+            }
+            else -> {
+                pendingBridgeUi = null
+                completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "Unknown bridge operation"))
+            }
+        }
+    }
+
+    /** Requests [perm] runtime permissions, then answers the bridge request. */
+    private fun requestBridgePermissions(request: NoxsAndroidBridge.Request, perm: NoxsAndroidPermissions.Perm) {
+        val toRequest = NoxsAndroidPermissions.requestList(perm)
+        if (toRequest.isEmpty() || NoxsAndroidPermissions.isGranted(this, perm)) {
+            pendingBridgeUi = null
+            completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(true, NoxsAndroidPermissions.statusText(this, perm)))
+            return
+        }
+        // Keep the pending request; the result handler completes it.
+        runCatching { bridgePermLauncher.launch(toRequest.toTypedArray()) }.getOrElse {
+            pendingBridgeUi = null
+            completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "Permission dialog unavailable"))
+        }
+    }
+
+    private fun onBridgePermissionsResult(grants: Map<String, Boolean>) {
+        val pending = pendingBridgeUi ?: return
+        pendingBridgeUi = null
+        if (!grants.values.all { it }) {
+            completeBridgeRequest(
+                pending.requestId,
+                NoxsAndroidBridge.CommandResult(false, "Permission denied — nothing was sent or changed")
+            )
+            return
+        }
+        when (pending.kind) {
+            "sms-send" -> {
+                val number = pending.args.getOrNull(0).orEmpty()
+                completeBridgeRequest(pending.requestId, androidBridge.sendSms(number, pending.text))
+            }
+            "camera" -> {
+                // The grant was collected first — now actually open the camera.
+                launchBridgeCamera(
+                    NoxsAndroidBridge.parseRequest(pending.requestId, listOf("camera") + pending.args)
+                )
+            }
+            else -> completeBridgeRequest(
+                pending.requestId,
+                NoxsAndroidBridge.CommandResult(true, "Permission granted")
+            )
+        }
+    }
+
+    /** Explicit, user-approved SMS send: recipient + message shown, one message. */
+    private fun confirmBridgeSmsSend(request: NoxsAndroidBridge.Request, message: String) {
+        val number = request.arg(1)
+        if (number.isBlank() || message.isEmpty()) {
+            pendingBridgeUi = null
+            completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "Usage: noxs sms send <number> (message via payload)"))
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Send SMS via Noxs")
+            .setMessage("To: $number\n\n${message.take(1200)}")
+            .setPositiveButton("Send now") { _, _ ->
+                val perm = NoxsAndroidPermissions.Perm.SMS
+                if (NoxsAndroidPermissions.isGranted(this, perm)) {
+                    pendingBridgeUi = null
+                    lifecycleScope.launch {
+                        val result = withContext(Dispatchers.IO) { androidBridge.sendSms(number, message) }
+                        completeBridgeRequest(request.id, result)
+                    }
+                } else {
+                    // Keep pendingBridgeUi; onBridgePermissionsResult completes with the send.
+                    runCatching {
+                        bridgePermLauncher.launch(NoxsAndroidPermissions.requestList(perm).toTypedArray())
+                    }.getOrElse {
+                        pendingBridgeUi = null
+                        completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "Permission dialog unavailable"))
+                    }
+                }
+            }
+            .setNegativeButton("Cancel") { _, _ ->
+                pendingBridgeUi = null
+                completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "Cancelled — no SMS was sent"))
+            }
+            .setOnCancelListener {
+                if (pendingBridgeUi?.requestId == request.id) {
+                    pendingBridgeUi = null
+                    completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "Cancelled — no SMS was sent"))
+                }
+            }
+            .show()
+    }
+
+    private fun launchBridgeDocumentPick(request: NoxsAndroidBridge.Request, multi: Boolean) {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = request.arg(2).ifEmpty { "*/*" }
+            if (multi) putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }
+        runCatching { bridgeSystemUiLauncher.launch(intent) }.getOrElse {
+            pendingBridgeUi = null
+            completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "Document picker unavailable"))
+        }
+    }
+
+    private fun launchBridgeExport(request: NoxsAndroidBridge.Request) {
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = request.arg(2).ifEmpty { "application/octet-stream" }
+            putExtra(Intent.EXTRA_TITLE, request.arg(1).ifEmpty { "noxs-export" })
+        }
+        runCatching { bridgeSystemUiLauncher.launch(intent) }.getOrElse {
+            pendingBridgeUi = null
+            completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "Document creator unavailable"))
+        }
+    }
+
+    private fun launchBridgeCamera(request: NoxsAndroidBridge.Request) {
+        val perm = NoxsAndroidPermissions.Perm.CAMERA
+        if (!NoxsAndroidPermissions.isGranted(this, perm)) {
+            // Keep pendingBridgeUi(kind=camera); the grant result relaunches capture.
+            runCatching {
+                bridgePermLauncher.launch(NoxsAndroidPermissions.requestList(perm).toTypedArray())
+            }.getOrElse {
+                pendingBridgeUi = null
+                completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "Permission dialog unavailable"))
+            }
+            return
+        }
+        val output = File(cacheDir, "bridge-capture-${System.currentTimeMillis()}.jpg")
+        bridgeCameraOutput = output
+        val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", output)
+        val intent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).apply {
+            putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri)
+            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching { bridgeSystemUiLauncher.launch(intent) }.getOrElse {
+            pendingBridgeUi = null
+            bridgeCameraOutput = null
+            completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "No camera app available"))
+        }
+    }
+
+    private fun launchBridgeShareFile(request: NoxsAndroidBridge.Request) {
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val payload = androidBridge.payloadFile(request)
+                    require(payload.isFile && payload.length() > 0) { "No staged file to share" }
+                    val shared = androidBridge.stageForSharing(payload)
+                    startActivity(androidBridge.shareFileIntent(shared, request.arg(1).ifEmpty { shared.name }, request.arg(2)))
+                    NoxsAndroidBridge.CommandResult(true, "Sharesheet opened")
+                }.getOrElse { NoxsAndroidBridge.CommandResult(false, it.message ?: "Could not share the file") }
+            }
+            pendingBridgeUi = null
+            completeBridgeRequest(request.id, result)
+        }
+    }
+
+    private fun onBridgePhotoPicked(uri: Uri?) {
+        val pending = pendingBridgeUi ?: return
+        pendingBridgeUi = null
+        if (uri == null) {
+            completeBridgeRequest(pending.requestId, NoxsAndroidBridge.CommandResult(false, "Gallery selection cancelled"))
+            return
+        }
+        bridgeTransfer("gallery import", pending.requestId) { output ->
+            contentResolver.openInputStream(uri)?.use { it.copyTo(output) }
+                ?: throw IllegalStateException("Could not open the selected photo")
+        }
+    }
+
+    private fun onBridgeSystemUiResult(result: ActivityResult) {
+        val pending = pendingBridgeUi ?: return
+        pendingBridgeUi = null
+        when (pending.kind) {
+            "doc-open" -> {
+                val uri = result.data?.data
+                if (result.resultCode == RESULT_OK && uri != null) {
+                    openBridgeDocumentExternally(pending, uri)
+                } else {
+                    completeBridgeRequest(pending.requestId, NoxsAndroidBridge.CommandResult(false, "Document selection cancelled"))
+                }
+            }
+            "doc-pick", "doc-import" -> {
+                if (result.resultCode != RESULT_OK) {
+                    completeBridgeRequest(pending.requestId, NoxsAndroidBridge.CommandResult(false, "Document selection cancelled"))
+                    return
+                }
+                if (pending.kind == "doc-import") {
+                    importBridgeDocuments(pending, result)
+                } else {
+                    val uri = result.data?.data
+                    if (uri == null) {
+                        completeBridgeRequest(pending.requestId, NoxsAndroidBridge.CommandResult(false, "No document selected"))
+                    } else {
+                        bridgeTransfer("document transfer", pending.requestId) { output ->
+                            contentResolver.openInputStream(uri)?.use { it.copyTo(output) }
+                                ?: throw IllegalStateException("Could not read the selected document")
+                        }
+                    }
+                }
+            }
+            "doc-export" -> {
+                val uri = result.data?.data
+                if (result.resultCode != RESULT_OK || uri == null) {
+                    completeBridgeRequest(pending.requestId, NoxsAndroidBridge.CommandResult(false, "Export cancelled"))
+                    return
+                }
+                bridgeTransfer("export", pending.requestId) { output ->
+                    androidBridge.payloadFile(
+                        NoxsAndroidBridge.parseRequest(pending.requestId, listOf("doc-export") + pending.args)
+                    ).takeIf { it.isFile }
+                        ?.inputStream()?.use { it.copyTo(output) }
+                        ?: throw IllegalStateException("Staged export payload is missing")
+                }
+            }
+            "camera" -> {
+                val file = bridgeCameraOutput
+                bridgeCameraOutput = null
+                if (result.resultCode != RESULT_OK || file == null || !file.isFile || file.length() == 0L) {
+                    file?.delete()
+                    completeBridgeRequest(pending.requestId, NoxsAndroidBridge.CommandResult(false, "Camera capture cancelled"))
+                    return
+                }
+                bridgeTransfer("camera transfer", pending.requestId) { output ->
+                    file.inputStream().use { it.copyTo(output) }
+                    file.delete()
+                }
+            }
+            "mount-grant" -> {
+                completeBridgeRequest(pending.requestId, NoxsAndroidBridge.CommandResult(true, NoxsStorageMount.statusText(this)))
+            }
+            "sms-contacts" -> {
+                val uri = result.data?.data
+                if (result.resultCode != RESULT_OK || uri == null) {
+                    completeBridgeRequest(pending.requestId, NoxsAndroidBridge.CommandResult(false, "Contact selection cancelled"))
+                    return
+                }
+                lifecycleScope.launch {
+                    val outcome = withContext(Dispatchers.IO) {
+                        runCatching {
+                            contentResolver.query(
+                                uri,
+                                arrayOf(
+                                    android.provider.ContactsContract.Contacts._ID,
+                                    android.provider.ContactsContract.Contacts.DISPLAY_NAME
+                                ),
+                                null, null, null
+                            )?.use { c ->
+                                if (c.moveToFirst()) {
+                                    val name = c.getString(1) ?: "contact"
+                                    NoxsAndroidBridge.CommandResult(true, "Selected contact: $name\nPass the number to noxs sms send or noxs sms compose")
+                                } else NoxsAndroidBridge.CommandResult(false, "Contact has no details")
+                            } ?: NoxsAndroidBridge.CommandResult(false, "Could not read the contact")
+                        }.getOrElse { NoxsAndroidBridge.CommandResult(false, "Could not read the contact") }
+                    }
+                    completeBridgeRequest(pending.requestId, outcome)
+                }
+            }
+            else -> completeBridgeRequest(pending.requestId, NoxsAndroidBridge.CommandResult(false, "Bridge operation cancelled"))
+        }
+    }
+
+    private fun openBridgeDocumentExternally(pending: PendingBridgeUi, uri: Uri) {
+        lifecycleScope.launch {
+            val outcome = withContext(Dispatchers.IO) {
+                runCatching {
+                    val type = contentResolver.getType(uri) ?: "*/*"
+                    val view = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, type)
+                        addFlags(
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                                Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                                Intent.FLAG_ACTIVITY_NEW_TASK
+                        )
+                    }
+                    startActivity(view)
+                    NoxsAndroidBridge.CommandResult(true, "Opened in an Android app")
+                }.getOrElse { NoxsAndroidBridge.CommandResult(false, "No Android app can open this document") }
+            }
+            completeBridgeRequest(pending.requestId, outcome)
+        }
+    }
+
+    /** Copies selected documents into the guest home (relative destination). */
+    private fun importBridgeDocuments(pending: PendingBridgeUi, result: ActivityResult) {
+        val uris = mutableListOf<Uri>()
+        result.data?.data?.let { uris.add(it) }
+        result.data?.clipData?.let { clip -> for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { uris.add(it) } }
+        if (uris.isEmpty()) {
+            completeBridgeRequest(pending.requestId, NoxsAndroidBridge.CommandResult(false, "No document selected"))
+            return
+        }
+        val destRel = pending.args.getOrNull(0).orEmpty().trim().ifEmpty { "imports" }
+        lifecycleScope.launch {
+            val outcome = withContext(Dispatchers.IO) {
+                runCatching {
+                    val dest = File(paths.rootfs, "home/noxs/" + destRel.trimStart('/').replace("..", "_").ifEmpty { "imports" })
+                    if (!dest.isDirectory && !dest.mkdirs()) throw IllegalStateException("Cannot create destination folder")
+                    var imported = 0
+                    var bytes = 0L
+                    for (uri in uris) {
+                        val name = queryBridgeDisplayName(uri) ?: continue
+                        val target = File(dest, com.crossberry.noxs.runtime.NoxsDocumentsPolicy.sanitizeDisplayName(name))
+                        contentResolver.openInputStream(uri)?.use { input ->
+                            java.io.FileOutputStream(target).use { output -> bytes += input.copyTo(output) }
+                        } ?: continue
+                        imported++
+                    }
+                    NoxsAndroidBridge.CommandResult(
+                        true,
+                        "Imported $imported document(s) (${bytes / 1024} KB) into ~/$destRel"
+                    )
+                }.getOrElse { NoxsAndroidBridge.CommandResult(false, it.message ?: "Import failed") }
+            }
+            completeBridgeRequest(pending.requestId, outcome)
+        }
+    }
+
+    private fun queryBridgeDisplayName(uri: Uri): String? = runCatching {
+        contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        }
+    }.getOrNull()?.let { it.ifBlank { null } }
+
+    /** Streams into the response-payload slot with a cancelable progress dialog. */
+    private fun bridgeTransfer(label: String, requestId: String, producer: (OutputStream) -> Unit) {
+        bridgeCancelRequested = false
+        val progressDialog = runCatching {
+            AlertDialog.Builder(this)
+                .setTitle("Noxs Android Bridge")
+                .setMessage("$label…\n0 KB transferred")
+                .setNegativeButton("Cancel") { _, _ -> bridgeCancelRequested = true }
+                .setCancelable(false)
+                .show()
+        }.getOrNull()
+        lifecycleScope.launch {
+            val outcome = withContext(Dispatchers.IO) {
+                var transferred = 0L
+                var lastUpdate = 0L
+                val temporary = androidBridge.tempResponsePayloadFile(requestId)
+                try {
+                    java.io.FileOutputStream(temporary).use { raw ->
+                        val sink = object : OutputStream() {
+                            override fun write(b: Int) {
+                                throw UnsupportedOperationException("single-byte writes are not used")
+                            }
+
+                            override fun write(b: ByteArray, off: Int, len: Int) {
+                                if (bridgeCancelRequested) throw java.io.InterruptedIOException("cancelled")
+                                raw.write(b, off, len)
+                                transferred += len
+                                val now = System.currentTimeMillis()
+                                if (now - lastUpdate > 250) {
+                                    lastUpdate = now
+                                    runOnUiThread {
+                                        progressDialog?.setMessage("$label…\n${transferred / 1024} KB transferred")
+                                    }
+                                }
+                            }
+                        }
+                        producer(sink)
+                    }
+                    if (bridgeCancelRequested) throw java.io.InterruptedIOException("cancelled")
+                    val bytes = androidBridge.finishResponsePayload(requestId, temporary)
+                    NoxsAndroidBridge.CommandResult(true, "$label complete: ${bytes / 1024} KB")
+                } catch (e: java.io.InterruptedIOException) {
+                    temporary.delete()
+                    NoxsAndroidBridge.CommandResult(false, "$label cancelled — no partial data was kept")
+                } catch (e: Exception) {
+                    temporary.delete()
+                    NoxsAndroidBridge.CommandResult(false, "$label failed: ${e.message?.take(200) ?: "unknown error"}")
+                }
+            }
+            progressDialog?.dismiss()
+            completeBridgeRequest(requestId, outcome)
+        }
+    }
 
     private fun renderSessions(list: List<NoxsSessionManager.Entry>) {
         val adapter = sessionAdapter ?: return

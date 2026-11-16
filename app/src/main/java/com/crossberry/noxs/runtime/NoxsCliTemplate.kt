@@ -17,7 +17,17 @@ object NoxsCliTemplate {
 #   noxs ubuntu status
 #   noxs code install|start|stop|restart|status|logs
 #   noxs docker install|start|stop|restart|status|info|test
-#   noxs storage [status|setup|map|repair|reset|ls|mkdir|cat|get|put|rm|cp|mv]
+#   noxs storage [status|setup|map|repair|reset|ls|mkdir|cat|get|put|rm|cp|mv|
+#                 permission|grant|revoke|mount|unmount|list]
+#   noxs files                        open the Noxs file browser (Android UI)
+#   noxs document open|import|export|gallery|picker
+#   noxs sms status|permission|send|compose|contacts
+#   noxs device info|battery|storage
+#   noxs notification status|permission|post
+#   noxs share <file> | noxs share -t <text>
+#   noxs camera [dest]
+#   noxs clipboard get|set <text>
+#   noxs network status
 #   noxs-service start|stop|restart|status [service]
 #   noxs-socket list|test <path>
 #   noxs-ps
@@ -40,6 +50,8 @@ CODE_PID="${'$'}NOXS_RUN_DIR/host/code-server.pid"       # host bind → readabl
 CODE_INSTALL_LOG="${'$'}NOXS_RUN_DIR/host/code-install.log"  # progress for the Noxs editor screen
 NOXS_STORAGE_HOST="/var/run/noxs/host/storage"
 NOXS_STORAGE_LAST_ID=""
+NOXS_BRIDGE_HOST="/var/run/noxs/host/android"
+NOXS_BRIDGE_LAST_ID=""
 
 msg()  { printf 'noxs: %s\n' "${'$'}*"; }
 err()  { printf 'noxs: %s\n' "${'$'}*" >&2; }
@@ -594,10 +606,20 @@ Usage: noxs storage [command]
   rm <category> <path>           Delete the selected document via Android's provider
   cp <category> <src> <dest>     Copy within one selected folder tree
   mv <category> <src> <dest>     Move within one selected folder tree
+  permission                     Android permission + mount overview
+  grant [--direct]               Pick a SAF folder (--direct: Android's
+                                 all-files-access screen for the /sdcard mount)
+  revoke                         Release all Noxs storage grants (Android's own
+                                 Settings controls the underlying permissions)
+  mount                          Opt in to the direct /sdcard bind for NEW
+                                 sessions + create ~/storage/* links
+  unmount                        Opt out of the direct /sdcard bind
+  list                           Locations, capacity, selected folders, mount
 
 Categories: shared, downloads, dcim, pictures, music, movies
-SAF access is command-based. It is not a POSIX mount; ordinary paths,
-Bash redirection, and arbitrary Linux applications cannot access these folders.
+SAF access is command-based: it is not a POSIX mount. The direct /sdcard
+mount is a separate OPT-IN that requires Android's own user-granted
+all-files access plus the explicit `noxs storage mount` toggle.
 HELP
 }
 
@@ -694,12 +716,379 @@ storage_command() {
                 storage_request move "${'$'}category" "${'$'}path" "${'$'}destination"
             fi
             ;;
+        permission)
+            bridge_request perm-status all || return 1
+            echo
+            bridge_request mount-status || true
+            ;;
+        grant)
+            if [ "${'$'}{1:-}" = "--direct" ]; then
+                bridge_request mount-grant || return 1
+                echo
+                bridge_request mount-status || true
+            else
+                storage_request setup shared
+            fi
+            ;;
+        revoke)
+            storage_request reset
+            ;;
+        mount)
+            if bridge_request mount-on; then
+                storage_links
+                msg "guest links ready: ~/storage/{shared,downloads,dcim,pictures,music,movies}"
+            else
+                return 1
+            fi
+            ;;
+        unmount)
+            bridge_request mount-off
+            ;;
+        list)
+            storage_request status || true
+            echo
+            bridge_request device-storage || true
+            echo
+            bridge_request mount-status || true
+            ;;
         *)
             err "unknown storage command: ${'$'}action"
             storage_usage >&2
             return 2
             ;;
     esac
+}
+
+# ------------------------------------------------ noxs android bridge
+# Secure request/response transport for the NX Android Integration commands
+# (noxs files | document | sms | device | notification | share | camera |
+#  clipboard | network + the storage mount toggles). Every operation is
+# optional and user-authorized through Android's own permission UI.
+
+bridge_cleanup() {
+    local id="${'$'}1"
+    rm -f "${'$'}NOXS_BRIDGE_HOST/requests/${'$'}id" \
+        "${'$'}NOXS_BRIDGE_HOST/responses/${'$'}id" \
+        "${'$'}NOXS_BRIDGE_HOST/payloads/${'$'}id" \
+        "${'$'}NOXS_BRIDGE_HOST/response-payloads/${'$'}id"
+}
+
+bridge_request() {
+    # bridge_request <operation> [a1..a5] [payload-file]
+    local op="${'$'}1" a1="${'$'}{2:-}" a2="${'$'}{3:-}" a3="${'$'}{4:-}" a4="${'$'}{5:-}" a5="${'$'}{6:-}" payload="${'$'}{7:-}"
+    local id request response attempt
+    NOXS_BRIDGE_LAST_ID=""
+    if [ ! -d "${'$'}NOXS_BRIDGE_HOST/requests" ]; then
+        err "Noxs Android bridge is unavailable; open the Noxs terminal and retry"
+        return 1
+    fi
+    id="${'$'}${'$'}-${'$'}(date +%s)-${'$'}RANDOM-${'$'}RANDOM"
+    request="${'$'}NOXS_BRIDGE_HOST/requests/${'$'}id"
+    response="${'$'}NOXS_BRIDGE_HOST/responses/${'$'}id"
+    bridge_cleanup "${'$'}id"
+    if [ -n "${'$'}payload" ]; then
+        if [ ! -f "${'$'}payload" ]; then
+            err "local file not found: ${'$'}payload"
+            return 1
+        fi
+        if ! cp -- "${'$'}payload" "${'$'}NOXS_BRIDGE_HOST/payloads/${'$'}id"; then
+            bridge_cleanup "${'$'}id"
+            err "could not stage the transfer payload"
+            return 1
+        fi
+    fi
+    printf '%s\n%s\n%s\n%s\n%s\n%s\n' "${'$'}op" "${'$'}a1" "${'$'}a2" "${'$'}a3" "${'$'}a4" "${'$'}a5" > "${'$'}request" || {
+        bridge_cleanup "${'$'}id"
+        err "could not send the bridge request"
+        return 1
+    }
+    attempt=0
+    while [ ! -f "${'$'}response" ] && [ "${'$'}attempt" -lt 600 ]; do
+        sleep 0.5
+        attempt=${'$'}((attempt + 1))
+    done
+    if [ ! -f "${'$'}response" ]; then
+        bridge_cleanup "${'$'}id"
+        err "Noxs Android bridge did not respond; keep Noxs open and retry"
+        return 1
+    fi
+    if [ "${'$'}(sed -n '1p' "${'$'}response" 2>/dev/null || true)" = "OK" ]; then
+        NOXS_BRIDGE_LAST_ID="${'$'}id"
+        tail -n +2 "${'$'}response"
+        return 0
+    fi
+    tail -n +2 "${'$'}response" >&2
+    bridge_cleanup "${'$'}id"
+    return 1
+}
+
+bridge_take_payload() {
+    # bridge_take_payload <dest-file> — saves the staged response payload
+    if [ -z "${'$'}NOXS_BRIDGE_LAST_ID" ]; then
+        err "no bridge payload to save"
+        return 1
+    fi
+    local rc=0
+    cp -- "${'$'}NOXS_BRIDGE_HOST/response-payloads/${'$'}NOXS_BRIDGE_LAST_ID" "${'$'}1" || rc=1
+    bridge_cleanup "${'$'}NOXS_BRIDGE_LAST_ID"
+    NOXS_BRIDGE_LAST_ID=""
+    return "${'$'}rc"
+}
+
+bridge_stage_text() {
+    # bridge_stage_text <text> — prints a temp file path (caller removes it)
+    local tmp
+    tmp="${'$'}(mktemp "${'$'}{TMPDIR:-/tmp}/noxs-bridge.XXXXXX")" || return 1
+    printf '%s' "${'$'}1" > "${'$'}tmp"
+    printf '%s' "${'$'}tmp"
+}
+
+storage_links() {
+    # ~/storage/* -> /sdcard (Termux-compatible layout). The links resolve
+    # once the opt-in direct mount is active; dangling before that, harmless.
+    mkdir -p "${'$'}HOME/storage" 2>/dev/null || return 0
+    local pair name sub
+    for pair in "shared:" "downloads:/Download" "dcim:/DCIM" "pictures:/Pictures" "music:/Music" "movies:/Movies"; do
+        name="${'$'}{pair%%:*}"
+        sub="${'$'}{pair#*:}"
+        ln -sfn "/sdcard${'$'}sub" "${'$'}HOME/storage/${'$'}name" 2>/dev/null || true
+    done
+}
+
+# --------------------------------------------------------- noxs files
+
+files_command() {
+    bridge_request ui-files
+}
+
+# ------------------------------------------------------ noxs document
+
+document_usage() {
+    cat <<'HELP'
+Usage: noxs document [command]
+  open                 Pick an Android document and open it in an Android app
+  import [dir] [--type MIME]
+                       Import one or more Android documents into ~/<dir>
+                       (default: ~/imports) with progress and cancel
+  export <file> [name] [mime]
+                       Export a Noxs file to any Android location through
+                       the system save dialog
+  gallery [dest-file]  Pick a photo through the Android Photo Picker and
+                       save it inside Noxs
+  picker [dest-file]   Pick one Android document and save it inside Noxs
+
+All transfers are explicit: Android shows its own picker and you choose
+exactly which document(s) Noxs may touch.
+HELP
+}
+
+document_command() {
+    local action="${'$'}{1:-help}"
+    case "${'$'}action" in
+        help|--help|-h) document_usage ;;
+        open)
+            bridge_request doc-open
+            ;;
+        import)
+            shift
+            local dest="" mime=""
+            while [ ${'$'}# -gt 0 ]; do
+                case "${'$'}1" in
+                    --type) mime="${'$'}{2:-}"; shift 2 ;;
+                    *) dest="${'$'}1"; shift ;;
+                esac
+            done
+            bridge_request doc-import "${'$'}dest" "${'$'}mime"
+            ;;
+        export)
+            local file="${'$'}{2:-}" name="${'$'}{3:-}" mime="${'$'}{4:-}"
+            if [ -z "${'$'}file" ]; then
+                err "usage: noxs document export <local-file> [name] [mime]"
+                return 2
+            fi
+            if [ ! -f "${'$'}file" ]; then
+                err "not found: ${'$'}file"
+                return 1
+            fi
+            name="${'$'}{name:-${'$'}(basename -- "${'$'}file")}"
+            if [ -z "${'$'}mime" ]; then
+                mime="${'$'}(file -b --mime-type -- "${'$'}file" 2>/dev/null || echo application/octet-stream)"
+            fi
+            bridge_request doc-export "${'$'}name" "${'$'}mime" "" "" "" "${'$'}file"
+            ;;
+        gallery)
+            shift
+            local dest="${'$'}{1:-${'$'}HOME/Pictures/noxs-gallery-${'$'}(date +%Y%m%d-%H%M%S).jpg}"
+            mkdir -p -- "${'$'}(dirname -- "${'$'}dest")" || return 1
+            if bridge_request doc-gallery; then
+                bridge_take_payload "${'$'}dest" && msg "photo saved: ${'$'}dest"
+            else
+                return 1
+            fi
+            ;;
+        picker)
+            shift
+            local dest="${'$'}{1:-${'$'}HOME/picked-${'$'}(date +%Y%m%d-%H%M%S)}"
+            mkdir -p -- "${'$'}(dirname -- "${'$'}dest")" || return 1
+            if bridge_request doc-pick; then
+                bridge_take_payload "${'$'}dest" && msg "document saved: ${'$'}dest"
+            else
+                return 1
+            fi
+            ;;
+        *)
+            err "unknown document command: ${'$'}action"
+            document_usage >&2
+            return 2
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------- noxs sms
+
+sms_usage() {
+    cat <<'HELP'
+Usage: noxs sms [command]
+  status                      Capability summary (no private data is read)
+  permission                  Ask for the SEND_SMS runtime permission
+  send <number> <message...>  Send ONE message after an explicit
+                              confirmation dialog (SEND_SMS permission)
+  compose <number> <message...>
+                              Open the system SMS app — final approval there
+  contacts                    Pick a contact (no permission needed)
+
+Noxs never reads messages and never sends automatically or in bulk.
+HELP
+}
+
+sms_command() {
+    local action="${'$'}{1:-status}"
+    case "${'$'}action" in
+        help|--help|-h) sms_usage ;;
+        ""|status) bridge_request sms-status ;;
+        permission) bridge_request perm-request sms ;;
+        contacts) bridge_request sms-contacts ;;
+        send|compose)
+            local number="${'$'}{2:-}"
+            if [ -z "${'$'}number" ]; then
+                err "usage: noxs sms ${'$'}action <number> <message...>"
+                return 2
+            fi
+            shift 2
+            if [ ${'$'}# -eq 0 ]; then
+                err "message is required"
+                return 2
+            fi
+            local tmp rc=0
+            tmp="${'$'}(bridge_stage_text "${'$'}*")" || return 1
+            bridge_request "sms-${'$'}action" "${'$'}number" "" "" "" "" "${'$'}tmp" || rc=1
+            rm -f "${'$'}tmp"
+            return "${'$'}rc"
+            ;;
+        *)
+            err "unknown sms command: ${'$'}action"
+            sms_usage >&2
+            return 2
+            ;;
+    esac
+}
+
+# -------------------------------------------------------- noxs device
+
+device_command() {
+    case "${'$'}{1:-info}" in
+        info) bridge_request device-info ;;
+        battery) bridge_request device-battery ;;
+        storage) bridge_request device-storage ;;
+        *) err "usage: noxs device info|battery|storage"; return 2 ;;
+    esac
+}
+
+# -------------------------------------------------- noxs notification
+
+notification_command() {
+    case "${'$'}{1:-status}" in
+        status) bridge_request notify-status ;;
+        permission) bridge_request perm-request notifications ;;
+        post)
+            local title="${'$'}{2:-}"
+            if [ -z "${'$'}title" ]; then
+                err "usage: noxs notification post <title> [body...]"
+                return 2
+            fi
+            shift 2
+            local tmp rc=0
+            tmp="${'$'}(bridge_stage_text "${'$'}*")" || return 1
+            bridge_request notify-post "${'$'}title" "" "" "" "" "${'$'}tmp" || rc=1
+            rm -f "${'$'}tmp"
+            return "${'$'}rc"
+            ;;
+        *) err "usage: noxs notification status|permission|post <title> [body...]"; return 2 ;;
+    esac
+}
+
+# -------------------------------------------------------- noxs share
+
+share_command() {
+    if [ "${'$'}{1:-}" = "-t" ]; then
+        shift
+        if [ ${'$'}# -eq 0 ]; then
+            err "usage: noxs share -t <text>"
+            return 2
+        fi
+        local tmp rc=0
+        tmp="${'$'}(bridge_stage_text "${'$'}*")" || return 1
+        bridge_request share-text "" "" "" "" "" "${'$'}tmp" || rc=1
+        rm -f "${'$'}tmp"
+        return "${'$'}rc"
+    fi
+    local file="${'$'}{1:-}"
+    if [ -z "${'$'}file" ] || [ ! -f "${'$'}file" ]; then
+        err "usage: noxs share <file> | noxs share -t <text>"
+        return 2
+    fi
+    local mime
+    mime="${'$'}(file -b --mime-type -- "${'$'}file" 2>/dev/null || echo application/octet-stream)"
+    bridge_request share-file "${'$'}(basename -- "${'$'}file")" "${'$'}mime" "" "" "" "${'$'}file"
+}
+
+# ------------------------------------------------------- noxs camera
+
+camera_command() {
+    local dest="${'$'}{1:-${'$'}HOME/Pictures/noxs-${'$'}(date +%Y%m%d-%H%M%S).jpg}"
+    mkdir -p -- "${'$'}(dirname -- "${'$'}dest")" || return 1
+    if bridge_request camera; then
+        bridge_take_payload "${'$'}dest" && msg "photo saved: ${'$'}dest"
+    else
+        return 1
+    fi
+}
+
+# ---------------------------------------------------- noxs clipboard
+
+clipboard_command() {
+    case "${'$'}{1:-get}" in
+        get) bridge_request clip-get ;;
+        set)
+            shift
+            if [ ${'$'}# -eq 0 ]; then
+                err "usage: noxs clipboard set <text>"
+                return 2
+            fi
+            local tmp rc=0
+            tmp="${'$'}(bridge_stage_text "${'$'}*")" || return 1
+            bridge_request clip-set "" "" "" "" "" "${'$'}tmp" || rc=1
+            rm -f "${'$'}tmp"
+            return "${'$'}rc"
+            ;;
+        *) err "usage: noxs clipboard get|set <text>"; return 2 ;;
+    esac
+}
+
+# ------------------------------------------------------ noxs network
+
+network_command() {
+    bridge_request net-status
 }
 
 # ---------------------------------------------------------------- noxs docker
@@ -1035,6 +1424,42 @@ case "${'$'}{1:-help}" in
         shift
         storage_command "${'$'}@"
         ;;
+    files)
+        shift
+        files_command "${'$'}@"
+        ;;
+    document)
+        shift
+        document_command "${'$'}@"
+        ;;
+    sms)
+        shift
+        sms_command "${'$'}@"
+        ;;
+    device)
+        shift
+        device_command "${'$'}@"
+        ;;
+    notification)
+        shift
+        notification_command "${'$'}@"
+        ;;
+    share)
+        shift
+        share_command "${'$'}@"
+        ;;
+    camera)
+        shift
+        camera_command "${'$'}@"
+        ;;
+    clipboard)
+        shift
+        clipboard_command "${'$'}@"
+        ;;
+    network)
+        shift
+        network_command "${'$'}@"
+        ;;
     docker)
         case "${'$'}{2:-status}" in
             install) docker_install ;;
@@ -1057,7 +1482,7 @@ case "${'$'}{1:-help}" in
         esac
         ;;
     help|--help|-h)
-        sed -n '2,11p' "${'$'}0"
+        sed -n '2,21p' "${'$'}0"
         ;;
     *)
         # Forward legacy aliases so 'noxs-service start ssh' works as 'noxs service'

@@ -42,6 +42,12 @@ class NoxsPaths(baseDir: File, val nativeLibDir: File? = null) {
     val pluginResponses: File = File(pluginControl, "responses")
     val pluginCatalogSnapshot: File = File(pluginControl, "catalog.txt")
     val pluginInstalledSnapshot: File = File(pluginControl, "plugins.txt")
+    // Guest→Android `noxs document|sms|device|...` bridge (Noxs Android Integration)
+    val bridgeControl: File = File(run, "android")
+    val bridgeRequests: File = File(bridgeControl, "requests")
+    val bridgeResponses: File = File(bridgeControl, "responses")
+    val bridgePayloads: File = File(bridgeControl, "payloads")
+    val bridgeResponsePayloads: File = File(bridgeControl, "response-payloads")
     val cache: File = File(base, NoxsConstants.ANDROID_CACHE_DIR)
     val logs: File = File(base, NoxsConstants.ANDROID_LOGS_DIR)
     val tmp: File = File(base, NoxsConstants.ANDROID_TMP_DIR)
@@ -73,7 +79,7 @@ class NoxsPaths(baseDir: File, val nativeLibDir: File? = null) {
     val noxsResourcesConf: File = File(rootfs, "etc/noxs/resources.conf")
 
     fun ensureBaseDirs(): Boolean =
-        listOf(base, bin, run, storageRequests, storageResponses, storagePayloads, storageResponsePayloads, webRequests, webResponses, pluginRequests, pluginResponses, cache, logs, tmp)
+        listOf(base, bin, run, storageRequests, storageResponses, storagePayloads, storageResponsePayloads, bridgeRequests, bridgeResponses, bridgePayloads, bridgeResponsePayloads, webRequests, webResponses, pluginRequests, pluginResponses, cache, logs, tmp)
             .all { it.isDirectory || it.mkdirs() }
 
     fun isInstalled(): Boolean = installMarker.isFile && prootBinary.isFile && rootfs.isDirectory

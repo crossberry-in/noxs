@@ -15,6 +15,35 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!--
+      NX Android Integration (all OPTIONAL, requested only when the user runs
+      the matching nx/noxs command — never at startup):
+        media         photo picker / gallery import (READ_MEDIA_* on 33+,
+                      legacy READ/WRITE_EXTERNAL_STORAGE on 32-)
+        camera        noxs camera (runtime grant before the camera app opens)
+        sms           noxs sms send (explicit confirmation dialog + runtime
+                      grant; compose always uses the system SMS app instead)
+        all-files     OPT-IN direct shared-storage mount (noxs storage mount +
+                      noxs storage grant --direct). User-approved in Android
+                      Settings, default off. Without it Noxs stays SAF-only.
+      Noxs never reads private messages, never sends automatically, and never
+      accesses other apps' private data.
+    -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+
     <application
         android:name=".NoxsApplication"
         android:allowBackup="false"
@@ -201,6 +230,21 @@
             <intent-filter>
                 <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
             </intent-filter>
+        </provider>
+
+        <!--
+          FileProvider for the NX Android Bridge share/camera flows: staged
+          payloads (cache/shared, bridge camera captures) are handed to the
+          Android Sharesheet / camera app as temporary content:// grants.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
         </provider>
     </application>
 </manifest>

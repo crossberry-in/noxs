@@ -131,9 +131,16 @@ class ProotLauncher(private val paths: NoxsPaths, private val resources: NoxsRes
         }
     }
 
-    /** Standard user session command (used by SessionManager). */
+    /** Standard user session command (used by SessionManager).
+     *  Carries the opt-in shared-storage bind when the user enabled the
+     *  direct mount AND Android granted all-files access (NoxsStorageMount). */
     fun sessionArgv(loginAsRoot: Boolean): List<String> =
-        buildArgv(Options(loginAsRoot = loginAsRoot))
+        buildArgv(
+            Options(
+                loginAsRoot = loginAsRoot,
+                extraBinds = NoxsStorageMount.guestBinds()
+            )
+        )
 
     /** Non-interactive one-shot for app maintenance commands (dpkg-query etc.). */
     fun oneShotArgv(cmd: List<String>, asRoot: Boolean = true): List<String> =

@@ -37,10 +37,12 @@ object NoxsPermissionCatalog {
     const val GROUP_DEVICE = "device"
     const val GROUP_SYSTEM = "system"
     const val GROUP_ENVIRONMENT = "environment"
+    const val GROUP_ANDROID = "android"
 
     val GROUPS: List<String> = listOf(
         GROUP_NOTIFICATIONS,
         GROUP_STORAGE,
+        GROUP_ANDROID,
         GROUP_BACKGROUND,
         GROUP_DEVICE,
         GROUP_SYSTEM,
@@ -193,7 +195,41 @@ object NoxsPermissionCatalog {
     /** The network row is informational only — never an Android runtime permission. */
     const val NETWORK_INFO_ID = "network.informational"
 
-    fun byId(id: String): Permission? = ALL.firstOrNull { it.id == id }
+    // ---- NX Android Integration (every grant is explicit and revocable) ----
 
-    fun inGroup(group: String): List<Permission> = ALL.filter { it.group == group }
+    val ANDROID_INTEGRATION: List<Permission> = listOf(
+        Permission(
+            id = "android.media",
+            group = GROUP_ANDROID,
+            level = Level.OPTIONAL,
+            description = "Import photos/videos through the Android Photo Picker or SAF (Android 13+ media permissions, asked on use).",
+            androidPermission = "android.permission.READ_MEDIA_IMAGES",
+            minSdk = 33
+        ),
+        Permission(
+            id = "android.camera",
+            group = GROUP_ANDROID,
+            level = Level.OPTIONAL,
+            description = "Open the native camera for noxs camera; captures are handed to the terminal only after capture.",
+            androidPermission = "android.permission.CAMERA"
+        ),
+        Permission(
+            id = "android.sms.send",
+            group = GROUP_ANDROID,
+            level = Level.OPTIONAL,
+            description = "Send a single SMS from the terminal after an explicit confirmation dialog. Never automatic, never bulk; compose mode uses the system SMS app without this grant.",
+            androidPermission = "android.permission.SEND_SMS"
+        ),
+        Permission(
+            id = "android.storage.mount",
+            group = GROUP_ANDROID,
+            level = Level.OPTIONAL,
+            description = "OPT-IN direct shared-storage mount (/sdcard inside the guest) — requires Android's user-granted all-files access in Settings; default off; revocable any time.",
+            settingsIntentAction = "android.settings.MANAGE_ALL_FILES_ACCESS_PERMISSION"
+        )
+    )
+
+    fun byId(id: String): Permission? = ALL.firstOrNull { it.id == id } ?: ANDROID_INTEGRATION.firstOrNull { it.id == id }
+
+    fun inGroup(group: String): List<Permission> = ALL.filter { it.group == group } + ANDROID_INTEGRATION.filter { it.group == group }
 }

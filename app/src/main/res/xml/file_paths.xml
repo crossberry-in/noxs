@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Noxs — NX Android Bridge share/camera transfer paths (FileProvider).
+  Only app-owned cache locations are shared out as temporary read grants;
+  nothing outside the Noxs sandbox is ever exposed through this provider.
+-->
+<paths>
+    <cache-path name="shared" path="shared/" />
+    <cache-path name="bridge-captures" path="." />
+</paths>

@@ -107,6 +107,10 @@ class NoxsApplication : Application() {
         super.onCreate()
         paths = NoxsPaths(this)
 
+        // NX Android Bridge: process-wide context for the opt-in shared-storage
+        // mount decision (ProotLauncher consults it at every session launch).
+        com.crossberry.noxs.runtime.NoxsStorageMount.init(this)
+
         // Route emulator callbacks to the Android main thread.
         val handler = Handler(Looper.getMainLooper())
         MainLoop.handler = handler

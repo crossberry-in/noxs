@@ -33,6 +33,7 @@ class StorageActivity : AppCompatActivity() {
     private lateinit var paths: NoxsPaths
     private lateinit var storageBridge: NoxsStorageBridge
     private lateinit var storagePickerLauncher: ActivityResultLauncher<Intent>
+    private lateinit var requestIntegrationPermissionsLauncher: ActivityResultLauncher<Array<String>>
     private var pendingCategory: NoxsStorageBridge.Category? = null
     private var adapter: TwoLineAdapter? = null
 
@@ -44,6 +45,10 @@ class StorageActivity : AppCompatActivity() {
         storagePickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             onStoragePickerResult(result)
         }
+        requestIntegrationPermissionsLauncher =
+            registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
+                render()
+            }
         binding = ActivityManagerBinding.inflate(layoutInflater)
         setContentView(binding.root)
         paths = (application as com.crossberry.noxs.NoxsApplication).paths
@@ -213,6 +218,7 @@ class StorageActivity : AppCompatActivity() {
                         onClick = { openNoxsHomeInSystemFiles() }
                     )
                 )
+                addAll(androidIntegrationRows())
                 add(
                     TwoLineRow(
                         title = "Use from terminal",
@@ -275,5 +281,91 @@ class StorageActivity : AppCompatActivity() {
 
     private companion object {
         const val STATE_STORAGE_CATEGORY = "storage_category"
+    }
+
+    // ------------------------------------------------ NX Android Integration
+
+    /** Permission dashboard + opt-in direct mount controls (glass-style rows). */
+    private fun androidIntegrationRows(): List<TwoLineRow> = buildList {
+        val mountReady = com.crossberry.noxs.runtime.NoxsStorageMount.isDirectStorageReady()
+        val mountEnabled = com.crossberry.noxs.runtime.NoxsStorageMount.isEnabled(this@StorageActivity)
+        add(
+            TwoLineRow(
+                title = "NX Android Integration",
+                subtitle = "Optional Android capabilities for the terminal — every grant is explicit and revocable"
+            )
+        )
+        com.crossberry.noxs.runtime.NoxsAndroidPermissions.Perm.values().forEach { perm ->
+            val state = com.crossberry.noxs.runtime.NoxsAndroidPermissions.statusText(this@StorageActivity, perm)
+            add(
+                TwoLineRow(
+                    title = "${perm.label}: ${state.substringAfter(": ")}",
+                    subtitle = "Tap to request through Android's own permission dialog (used by nx document/sms/camera)",
+                    onClick = {
+                        runCatching {
+                            com.crossberry.noxs.runtime.NoxsAndroidPermissions.requestList(perm).takeIf { it.isNotEmpty() }
+                        }?.let { grants ->
+                            requestIntegrationPermissionsLauncher.launch(grants.toTypedArray())
+                        } ?: Toast.makeText(this@StorageActivity, state, Toast.LENGTH_SHORT).show()
+                    }
+                )
+            )
+        }
+        add(
+            TwoLineRow(
+                title = "Direct shared-storage mount: ${if (mountEnabled && mountReady) "on (/sdcard)" else "off"}",
+                subtitle = if (mountReady)
+                    "Android grant is present. Tap to toggle /storage/emulated/0 -> /sdcard for NEW sessions"
+                else
+                    "Tap to open Android's All-files-access screen (official user-granted setting), then toggle",
+                onClick = { confirmDirectMountToggle() }
+            )
+        )
+        add(
+            TwoLineRow(
+                title = "Use from terminal",
+                subtitle = "nx files · nx document import|export|gallery · nx sms · nx device · nx storage mount"
+            )
+        )
+    }
+
+    private fun confirmDirectMountToggle() {
+        val mount = com.crossberry.noxs.runtime.NoxsStorageMount
+        if (!mount.isDirectStorageReady()) {
+            runCatching {
+                startActivity(
+                    android.content.Intent(
+                        com.crossberry.noxs.runtime.NoxsAndroidPermissions.ALL_FILES_ACTION,
+                        android.net.Uri.parse("package:$packageName")
+                    )
+                )
+            }.onFailure {
+                Toast.makeText(this, "All-files-access screen unavailable on this device", Toast.LENGTH_LONG).show()
+            }
+            return
+        }
+        val enabling = !mount.isEnabled(this)
+        AlertDialog.Builder(this)
+            .setTitle(if (enabling) "Enable direct shared-storage mount?" else "Disable direct shared-storage mount?")
+            .setMessage(
+                if (enabling)
+                    "Android's All-files-access grant is present, so /storage/emulated/0 will be bound into the guest " +
+                        "as /sdcard for NEW terminal sessions (plus ~/storage/* links). You can disable this at any time. " +
+                        "SAF-only command access continues to work regardless."
+                else
+                    "The direct /sdcard bind stops for NEW terminal sessions. Android's grant itself is unchanged; " +
+                        "revoke it in Android Settings if you want it fully removed."
+            )
+            .setPositiveButton(if (enabling) "Enable mount" else "Disable mount") { _, _ ->
+                mount.setEnabled(this, enabling)
+                Toast.makeText(
+                    this,
+                    if (enabling) "Mount enabled for NEW sessions: /sdcard" else "Mount disabled for NEW sessions",
+                    Toast.LENGTH_LONG
+                ).show()
+                render()
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
     }
 }
