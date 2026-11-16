@@ -80,28 +80,39 @@ jobs:
   docs-pr:
     name: Open documentation review PR
     needs: validate
-    # Runs only when a fine-grained token is configured; otherwise the
-    # validate job artifacts carry the review task list.
-    # Job-level env is the supported place to test a secret for existence.
-    env:
-      HAS_DOCS_TOKEN: ${{ secrets.DOCS_SYNC_TOKEN != '' }}
-    if: github.event_name == 'push' && env.HAS_DOCS_TOKEN == 'true'
+    # Runs on push; the PR steps execute ONLY when a fine-grained token is
+    # configured (checked at STEP level — the only level where both env and
+    # secrets contexts are usable). Without the token this job reports the
+    # skip and the validate job artifacts carry the review task list.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      HAS_DOCS_TOKEN: ${{ secrets.DOCS_SYNC_TOKEN != '' }}
     steps:
+      - name: Skip unless DOCS_SYNC_TOKEN is configured
+        if: env.HAS_DOCS_TOKEN != 'true'
+        run: |
+          echo "DOCS_SYNC_TOKEN is not configured."
+          echo "The docs-sync validate job artifacts carry the affected-pages report;"
+          echo "documentation review must be filed manually (or configure a fine-grained token)."
       - uses: actions/checkout@v4
+        if: env.HAS_DOCS_TOKEN == 'true'
         with:
           fetch-depth: 2
       - uses: actions/setup-python@v5
+        if: env.HAS_DOCS_TOKEN == 'true'
         with:
           python-version: "3.12"
       - name: Compute affected pages
+        if: env.HAS_DOCS_TOKEN == 'true'
         run: |
           CHANGED=$(git diff --name-only HEAD~1 HEAD || true)
           python3 scripts/doc_sync.py affected $CHANGED > /tmp/affected.txt || true
           cat /tmp/affected.txt
       - name: Open review PR in nxos-docs (task list, never silent overwrites)
+        if: env.HAS_DOCS_TOKEN == 'true'
         env:
           DOCS_SYNC_TOKEN: ${{ secrets.DOCS_SYNC_TOKEN }}
           SOURCE_SHA: ${{ github.sha }}
