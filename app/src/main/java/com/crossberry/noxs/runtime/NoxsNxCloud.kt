@@ -28,7 +28,7 @@ read_credentials() {
   local username password
   read -r -p "NXMirror username: " username
   read -r -s -p "Password: " password; printf '\n'
-  [ -n "§username" ] && [ -n "§password" ] || fail "Username and password are required"
+  if [ -z "§username" ] || [ -z "§password" ]; then fail "Username and password are required"; fi
   printf '%s' "§username" > "§CONFIG_DIR/.username"
   python3 -c 'import json,sys; print(json.dumps({"username":sys.argv[1],"password":sys.argv[2]}))' "§username" "§password" > "§CONFIG_DIR/request.json"
 }

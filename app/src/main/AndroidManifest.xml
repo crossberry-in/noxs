@@ -24,7 +24,7 @@
         sms           noxs sms send (explicit confirmation dialog + runtime
                       grant; compose always uses the system SMS app instead)
         all-files     OPT-IN direct shared-storage mount (noxs storage mount +
-                      noxs storage grant --direct). User-approved in Android
+                      noxs storage grant direct). User-approved in Android
                       Settings, default off. Without it Noxs stays SAF-only.
       Noxs never reads private messages, never sends automatically, and never
       accesses other apps' private data.

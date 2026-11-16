@@ -2,7 +2,7 @@
 
 Noxs uses an Android-native, terminal-first interface. The design system is inspired by Apple's emphasis on clarity, accessibility, craft, and restraint, translated into Android and Material 3 patterns.
 
-The full agent workflow is in [the Noxs Apple-inspired design skill](../.agents/skills/apple-design/SKILL.md), adapted from [dickwu/apple-design-skill](https://github.com/dickwu/apple-design-skill).
+The agent workflow follows the [dickwu/apple-design-skill](https://github.com/dickwu/apple-design-skill) methodology, adapted for Noxs.
 
 ## Design thesis
 

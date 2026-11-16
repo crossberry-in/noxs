@@ -645,7 +645,7 @@ storage_command() {
         reset)
             storage_request reset
             ;;
-        ls|list)
+        ls)
             category="${'$'}{1:-}"; path="${'$'}{2:-}"
             if [ -z "${'$'}category" ]; then err "usage: noxs storage ls <category> [relative-path]"; return 2; fi
             storage_request list "${'$'}category" "${'$'}path"

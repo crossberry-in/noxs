@@ -102,11 +102,16 @@ nav:
       - Security model: SECURITY.md
       - Unix domain sockets: UNIX-SOCKETS.md
       - Permission Center: PERMISSION-CENTER.md
+      - NX Android Integration: ANDROID-INTEGRATION.md
       - Rust performance core: RUST-CORE.md
   - Extending Noxs:
       - Noxs API (@noxs/nx-api): NX-API.md
       - Plugin SDK: PLUGIN-SDK.md
       - nx-installer: NX-INSTALLER.md
+      - App Center: APP-CENTER.md
+      - Built-in App Ecosystem: APP-ECOSYSTEM.md
+  - Design:
+      - UI/UX Design System: UI-UX-DESIGN-SYSTEM.md
   - NoxOS Emulator:
       - Integration overview: NOXOS-EMULATOR.md
       - QEMU on Android (M1): QEMU-ANDROID.md
