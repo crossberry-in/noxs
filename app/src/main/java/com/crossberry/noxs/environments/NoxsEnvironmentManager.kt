@@ -20,6 +20,7 @@ import com.crossberry.noxs.environments.model.PackageManagerKind
 import com.crossberry.noxs.environments.model.TerminalProfile
 import com.crossberry.noxs.environments.providers.ProviderRegistry
 import com.crossberry.noxs.environments.setup.SetupTaskManager
+import com.crossberry.noxs.runtime.NoxsDocumentsProvider
 import com.crossberry.noxs.runtime.NoxsPaths
 import com.crossberry.noxs.shared.NoxsLog
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -94,6 +95,10 @@ class NoxsEnvironmentManager(private val context: Context) {
         val sorted = sortedEnvironments(current)
         _environments.value = sorted
         persistRegistry()
+        // The documents-provider root set changed (install completed/recovery
+        // status): ask DocumentsUI to refresh instead of serving its stale
+        // "Noxs Linux Home" entry forever.
+        NoxsDocumentsProvider.notifyRootsChanged(context)
     }
 
     @Synchronized
@@ -104,6 +109,7 @@ class NoxsEnvironmentManager(private val context: Context) {
             persistActive()
         }
         persistRegistry()
+        NoxsDocumentsProvider.notifyRootsChanged(context)
     }
 
     private fun sortedEnvironments(list: List<Environment>) =
@@ -193,6 +199,7 @@ class NoxsEnvironmentManager(private val context: Context) {
         persistActive()
         upsert(env.copy(lastUsedAt = System.currentTimeMillis()))
         NoxsLog.i("EnvManager", "active environment -> $id")
+        NoxsDocumentsProvider.notifyRootsChanged(context)
         return true
     }
 

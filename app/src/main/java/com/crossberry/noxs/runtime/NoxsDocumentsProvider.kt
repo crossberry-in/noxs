@@ -33,6 +33,8 @@ import android.net.Uri
 import android.os.CancellationSignal
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
+import com.crossberry.noxs.NoxsApplication
+import com.crossberry.noxs.environments.model.EnvironmentStatus
 import com.crossberry.noxs.shared.NoxsConstants
 import com.crossberry.noxs.shared.NoxsLog
 import android.provider.DocumentsProvider
@@ -51,12 +53,36 @@ class NoxsDocumentsProvider : DocumentsProvider() {
 
     override fun onCreate(): Boolean {
         val context = context ?: return false
-        paths = (context.applicationContext as? android.app.Application)
-            ?.let { it as? com.crossberry.noxs.NoxsApplication }
-            ?.let { app -> runCatching { app.environments.activePaths() }.getOrNull() }
-            ?: NoxsPaths(context)
+        paths = resolvePaths(context)
         fs = NoxsEditorFilesystem(paths.rootfs)
         return true
+    }
+
+    /**
+     * Picks the best installed environment at bind time — which happens
+     * BEFORE Application.onCreate() on a cold process (ContentProviders are
+     * created first), so every step is guarded:
+     *  1. the active environment (the manager's own fallback chain)
+     *  2. ANY other READY environment whose install is complete
+     *  3. the legacy/default base
+     * A stale active id (removed/failed environment) used to leave the
+     * provider blind while a perfectly good environment sat READY — the
+     * DocumentsUI entry then failed with "Can't load content at the moment".
+     */
+    private fun resolvePaths(context: Context): NoxsPaths {
+        val fallback = NoxsPaths(context)
+        val app = context.applicationContext as? NoxsApplication ?: return fallback
+        val manager = runCatching { app.environments }.getOrNull() ?: return fallback
+        runCatching { manager.activePaths() }.getOrNull()
+            ?.takeIf { it.isInstalled() }
+            ?.let { return it }
+        runCatching {
+            manager.environments.value
+                .filter { it.status == EnvironmentStatus.READY }
+                .map { manager.pathsFor(it) }
+                .firstOrNull { it.isInstalled() }
+        }.getOrNull()?.let { return it }
+        return fallback
     }
 
     // ------------------------------------------------------------ helpers
@@ -83,6 +109,25 @@ class NoxsDocumentsProvider : DocumentsProvider() {
         return fs
     }
 
+    /**
+     * Best-effort recreation of the guest home after a reset / legacy import
+     * / interrupted user-creation step: the environment IS installed but
+     * /home/noxs is missing, so the DocumentsUI root silently vanished and
+     * open pickers showed "Can't load content at the moment". Recreating an
+     * EMPTY home restores the root (an mkdirs() can never destroy data).
+     */
+    private fun healHome(): Boolean = runCatching {
+        val home = File(paths.rootfs, NoxsConstants.DEFAULT_USER_HOME.trimStart('/'))
+        home.isDirectory || home.mkdirs()
+    }.onFailure {
+        NoxsLog.w("Documents", "healHome failed (${it.message})")
+    }.getOrDefault(false)
+
+    /** A valid, EMPTY document cursor — DocumentsUI renders "no files"
+     *  instead of its "Can't load content at the moment" error page. */
+    private fun emptyDocumentCursor(projection: Array<out String>?): MatrixCursor =
+        MatrixCursor(resolveDocumentProjection(projection))
+
     /** resolve() at the API boundary: policy rejections surface to SAF as
      *  plain FileNotFoundException (never a binder-side crash). */
     private fun resolveF(docId: String): File = try {
@@ -98,11 +143,15 @@ class NoxsDocumentsProvider : DocumentsProvider() {
     private fun includeDocument(cursor: MatrixCursor, file: File, docId: String) {
         val isDir = file.isDirectory
         val flags = when {
+            docId == NoxsDocumentsPolicy.HOME_DOC ->
+                // The exposed root itself: children may be created, but the
+                // picker must never offer to delete/rename Noxs home.
+                DocumentsContract.Document.FLAG_DIR_SUPPORTS_CREATE
             isDir -> (DocumentsContract.Document.FLAG_SUPPORTS_WRITE or DocumentsContract.Document.FLAG_SUPPORTS_DELETE or
                 DocumentsContract.Document.FLAG_SUPPORTS_RENAME or DocumentsContract.Document.FLAG_DIR_SUPPORTS_CREATE)
             else -> (DocumentsContract.Document.FLAG_SUPPORTS_WRITE or DocumentsContract.Document.FLAG_SUPPORTS_DELETE or
                 DocumentsContract.Document.FLAG_SUPPORTS_RENAME)
-        }.let { f -> if (file.canWrite()) f else DocumentsContract.Document.FLAG_SUPPORTS_DELETE }
+        }.let { f -> if (docId != NoxsDocumentsPolicy.HOME_DOC && !file.canWrite()) DocumentsContract.Document.FLAG_SUPPORTS_DELETE else f }
         cursor.newRow().apply {
             add(DocumentsContract.Document.COLUMN_DOCUMENT_ID, docId)
             add(DocumentsContract.Document.COLUMN_DISPLAY_NAME, file.name.ifEmpty { NoxsDocumentsPolicy.ROOT_TITLE })
@@ -127,43 +176,76 @@ class NoxsDocumentsProvider : DocumentsProvider() {
     // ---------------------------------------------------- provider contract
 
     override fun queryRoots(projection: Array<out String>?): Cursor {
-        val cursor = MatrixCursor(projection ?: resolveRootProjection(projection))
+        val cursor = MatrixCursor(resolveRootProjection(projection))
         if (ready) {
             // The home directory must EXIST to be exposed — a half-installed
             // or reset environment reports no roots instead of failing.
-            runCatching { NoxsDocumentsPolicy.resolve(fs, NoxsDocumentsPolicy.HOME_DOC) }
-                .onSuccess { if (it.isDirectory) includeRoot(cursor) }
-                .onFailure { NoxsLog.w("Documents", "roots: home unavailable (${it.message})") }
+            val home = runCatching { NoxsDocumentsPolicy.resolve(fs, NoxsDocumentsPolicy.HOME_DOC) }
+            if (home.getOrNull()?.isDirectory == true) {
+                includeRoot(cursor)
+            } else if (healHome()) {
+                // Environment installed but /home/noxs vanished (legacy
+                // import, interrupted user creation): recreate the empty
+                // home so the DocumentsUI entry keeps working.
+                includeRoot(cursor)
+                notifyChildren(NoxsDocumentsPolicy.HOME_DOC)
+            } else {
+                NoxsLog.w("Documents", "roots: home unavailable (${home.exceptionOrNull()?.message})")
+            }
         }
         return cursor
     }
 
-    override fun queryDocument(documentId: String, projection: Array<out String>?): Cursor {
-        val cursor = MatrixCursor(resolveDocumentProjection(projection))
-        val file = resolveF(documentId)
-        includeDocument(cursor, file, documentId)
-        return cursor
-    }
+    override fun queryDocument(documentId: String, projection: Array<out String>?): Cursor =
+        try {
+            val cursor = MatrixCursor(resolveDocumentProjection(projection))
+            val file = resolveF(documentId)
+            includeDocument(cursor, file, documentId)
+            cursor
+        } catch (e: Exception) {
+            // A missing/vanished document surfaces as an EMPTY cursor, not an
+            // exception: throwing here is what turns a stale picker into
+            // DocumentsUI's "Can't load content at the moment" page.
+            NoxsLog.w("Documents", "queryDocument($documentId): ${e.message}")
+            emptyDocumentCursor(projection)
+        }
 
     override fun queryChildDocuments(
         parentDocumentId: String,
         projection: Array<out String>?,
         sortOrder: String?
     ): Cursor {
-        val parent = resolveF(parentDocumentId)
-        if (!parent.isDirectory) throw FileNotFoundException("Not a directory: $parentDocumentId")
-        val cursor = MatrixCursor(resolveDocumentProjection(projection))
-        val children = parent.listFiles()
-        if (children != null) {
-            children
-                .sortedWith(compareByDescending<File> { it.isDirectory }.thenBy { it.name.lowercase() })
-                .forEach { child ->
-                    includeDocument(cursor, child, joinDoc(parentDocumentId, child.name))
-                }
+        fun inner(): MatrixCursor {
+            val parent = resolveF(parentDocumentId)
+            if (!parent.isDirectory) throw FileNotFoundException("Not a directory: $parentDocumentId")
+            val cursor = MatrixCursor(resolveDocumentProjection(projection))
+            val children = parent.listFiles()
+            if (children != null) {
+                children
+                    .sortedWith(compareByDescending<File> { it.isDirectory }.thenBy { it.name.lowercase() })
+                    .forEach { child ->
+                        includeDocument(cursor, child, joinDoc(parentDocumentId, child.name))
+                    }
+            }
+            val uri = DocumentsContract.buildDocumentUri(authority, parentDocumentId)
+            cursor.setNotificationUri(context?.contentResolver, uri)
+            return cursor
         }
-        val uri = DocumentsContract.buildDocumentUri(authority, parentDocumentId)
-        cursor.setNotificationUri(context?.contentResolver, uri)
-        return cursor
+        return try {
+            inner()
+        } catch (e: FileNotFoundException) {
+            // A stale picker may still browse the home root after a reset:
+            // one heal attempt, then a valid empty cursor — never the error page.
+            if (parentDocumentId == NoxsDocumentsPolicy.HOME_DOC && healHome()) {
+                runCatching { inner() }.getOrElse { emptyDocumentCursor(projection) }
+            } else {
+                NoxsLog.w("Documents", "children($parentDocumentId): ${e.message}")
+                emptyDocumentCursor(projection)
+            }
+        } catch (e: Exception) {
+            NoxsLog.w("Documents", "children($parentDocumentId) failed: ${e.javaClass.simpleName}")
+            emptyDocumentCursor(projection)
+        }
     }
 
     override fun isChildDocument(parentDocumentId: String, documentId: String): Boolean =
@@ -220,6 +302,9 @@ class NoxsDocumentsProvider : DocumentsProvider() {
     }
 
     override fun renameDocument(documentId: String, displayName: String): String {
+        if (documentId == NoxsDocumentsPolicy.HOME_DOC) {
+            throw FileNotFoundException("Refusing to rename the Noxs home root")
+        }
         val parentDocId = documentId.substringBeforeLast('/', missingDelimiterValue = NoxsDocumentsPolicy.HOME_DOC)
         val file = resolveF(documentId)
         val name = NoxsDocumentsPolicy.sanitizeDisplayName(displayName)
@@ -243,6 +328,24 @@ class NoxsDocumentsProvider : DocumentsProvider() {
 
     companion object {
         const val ROOT_ID = "noxs-home"
+
+        /**
+         * Asks DocumentsUI to re-query our roots (install completed, active
+         * environment switched, environment removed). Without this the system
+         * Files app keeps a stale "Noxs Linux Home" entry — tapping it loads
+         * children of a dead document id and shows "Can't load content at
+         * the moment". Safe from any process state; a no-op when the provider
+         * has never been bound.
+         */
+        fun notifyRootsChanged(context: Context?) {
+            if (context == null) return
+            runCatching {
+                context.contentResolver.notifyChange(
+                    DocumentsContract.buildRootsUri(context.packageName + ".documents"),
+                    null
+                )
+            }
+        }
 
         private fun resolveRootProjection(projection: Array<out String>?): Array<out String> =
             projection ?: arrayOf(
