@@ -26,7 +26,8 @@ class NoxsStorageBridge(context: Context, private val paths: NoxsPaths) {
         DCIM("dcim", "DCIM", listOf("DCIM")),
         PICTURES("pictures", "Pictures", listOf("Pictures")),
         MUSIC("music", "Music", listOf("Music")),
-        MOVIES("movies", "Movies", listOf("Movies", "Videos"));
+        MOVIES("movies", "Movies", listOf("Movies", "Videos")),
+        DOCUMENTS("documents", "Documents", listOf("Document", "Documents"));
 
         companion object {
             fun fromKey(key: String): Category? = values().firstOrNull { it.key == key.lowercase(Locale.ROOT) }
@@ -135,7 +136,24 @@ class NoxsStorageBridge(context: Context, private val paths: NoxsPaths) {
             }
             appendLine("Permission: $permissionText")
             appendLine("Access: SAF-backed Noxs commands (not a POSIX mount)")
-            if (!shared.available) appendLine("Run: noxs-setup-storage")
+            when {
+                !shared.available && hasSavedMapping ->
+                    appendLine("The saved Shared mapping is revoked or stale — run: noxs-setup-storage")
+                !shared.available ->
+                    appendLine("Run: noxs-setup-storage")
+                else -> {
+                    val unmapped = items.filter { it.category != Category.SHARED && !it.available }
+                    if (unmapped.isNotEmpty()) {
+                        // Honest hint: aliases resolve ONLY inside the selected
+                        // Shared tree — a non-root Shared folder cannot map them.
+                        appendLine(
+                            "Note: ${unmapped.joinToString(", ") { it.category.label }} map automatically " +
+                                "only when Shared is the device root (/storage/emulated/0). " +
+                                "Map any of them individually: noxs storage map <category>"
+                        )
+                    }
+                }
+            }
         }.trimEnd()
     }
 

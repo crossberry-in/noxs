@@ -1,27 +1,17 @@
 #!/bin/bash
 # noxs — Noxs CLI for the Ubuntu 24.04 LTS userspace (original implementation)
-# Usage:
-#   noxs help
-#   noxs status
-#   noxs update
-#   noxs info
-#   noxs ubuntu status
+# Full command reference: noxs help      Detailed page: noxs help <topic>
+# Documentation: https://crossberry-in.github.io/nxos-docs/
+# Command families (all verified against this script — nothing invented):
+#   noxs help | version | info | status | update | ubuntu status
 #   noxs code install|start|stop|restart|status|logs
 #   noxs docker install|start|stop|restart|status|info|test
 #   noxs storage [status|setup|map|repair|reset|ls|mkdir|cat|get|put|rm|cp|mv|
 #                 permission|grant|revoke|mount|unmount|list]
-#   noxs files                        open the Noxs file browser (Android UI)
-#   noxs document open|import|export|gallery|picker
-#   noxs sms status|permission|send|compose|contacts
-#   noxs device info|battery|storage
-#   noxs notification status|permission|post
-#   noxs share <file> | noxs share -t <text>
-#   noxs camera [dest]
-#   noxs clipboard get|set <text>
-#   noxs network status
-#   noxs-service start|stop|restart|status [service]
-#   noxs-socket list|test <path>
-#   noxs-ps
+#   noxs files | document | sms | device | notification | share | camera |
+#        clipboard | network | docs
+#   noxs-service / noxs-socket / noxs-ps (helper scripts)
+# nx commands (pkg, plug, ai, cert-fix, ...) are provided by the nx CLI.
 
 set -u
 # Paths are env-overridable so scripts/test-code-cli.sh can exercise the
@@ -43,6 +33,9 @@ NOXS_STORAGE_HOST="/var/run/noxs/host/storage"
 NOXS_STORAGE_LAST_ID=""
 NOXS_BRIDGE_HOST="/var/run/noxs/host/android"
 NOXS_BRIDGE_LAST_ID=""
+# Documentation base URL (configurable; routes come from NoxsDocsMap.kt and
+# are drift-checked by tests against the deployed GitHub Pages sitemap).
+NOXS_DOCS_BASE="${NOXS_DOCS_BASE:-https://crossberry-in.github.io/nxos-docs}"
 
 msg()  { printf 'noxs: %s\n' "$*"; }
 err()  { printf 'noxs: %s\n' "$*" >&2; }
@@ -607,10 +600,12 @@ Usage: noxs storage [command]
   unmount                        Opt out of the direct /sdcard bind
   list                           Locations, capacity, selected folders, mount
 
-Categories: shared, downloads, dcim, pictures, music, movies
+Categories: shared, downloads, dcim, pictures, music, movies, documents
 SAF access is command-based: it is not a POSIX mount. The direct /sdcard
 mount is a separate OPT-IN that requires Android's own user-granted
-all-files access plus the explicit `noxs storage mount` toggle.
+all-files access plus the explicit 'noxs storage mount' toggle.
+Detailed help: noxs help storage
+Documentation: https://crossberry-in.github.io/nxos-docs/files/storage-access/
 HELP
 }
 
@@ -727,7 +722,7 @@ storage_command() {
         mount)
             if bridge_request mount-on; then
                 storage_links
-                msg "guest links ready: ~/storage/{shared,downloads,dcim,pictures,music,movies}"
+                msg "guest links ready: ~/storage/{shared,downloads,dcim,pictures,music,movies,documents}"
             else
                 return 1
             fi
@@ -839,7 +834,7 @@ storage_links() {
     # once the opt-in direct mount is active; dangling before that, harmless.
     mkdir -p "$HOME/storage" 2>/dev/null || return 0
     local pair name sub
-    for pair in "shared:" "downloads:/Download" "dcim:/DCIM" "pictures:/Pictures" "music:/Music" "movies:/Movies"; do
+    for pair in "shared:" "downloads:/Download" "dcim:/DCIM" "pictures:/Pictures" "music:/Music" "movies:/Movies" "documents:/Documents"; do
         name="${pair%%:*}"
         sub="${pair#*:}"
         ln -sfn "/sdcard$sub" "$HOME/storage/$name" 2>/dev/null || true
@@ -1326,6 +1321,10 @@ do_info() {
     echo "  architecture: $(uname -m 2>/dev/null || echo unknown)"
     echo "  storage:     SAF document commands; no POSIX mount"
     echo "  sudo:        Noxs sandbox only"
+    echo "  android-groups: the guest inherits Android's supplementary GIDs"
+    echo "                  (3003 inet, 9997 everybody, plus device-specific ids)."
+    echo "                  'cannot find name for group ID' notes from id/groups"
+    echo "                  are cosmetic — Android never maps them in the guest."
     noxs-socket list 2>/dev/null | head -5 || true
 }
 
@@ -1398,7 +1397,836 @@ do_update() {
     sudo DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Use-Pty=0 upgrade
 }
 
+# ------------------------------------------------------------ noxs version
+
+do_version() {
+    local version
+    version="$(bridge_request app-version 2>/dev/null || true)"
+    if [ -n "$version" ]; then
+        printf 'Noxs %s — %s userspace (%s)\n' "$version" "$(ubuntu_pretty_name || echo 'Ubuntu 24.04 LTS')" "$(uname -m 2>/dev/null || echo unknown)"
+    else
+        printf 'Noxs Linux — %s userspace (%s)\n' "$(ubuntu_pretty_name || echo 'Ubuntu 24.04 LTS')" "$(uname -m 2>/dev/null || echo unknown)"
+        echo "  app version needs the Noxs Android bridge (open the Noxs terminal)"
+    fi
+}
+
+# -------------------------------------------------------------- noxs docs
+# Documentation deep links. The mapping mirrors NoxsDocsMap.kt (the Android
+# single source of truth) and is drift-checked by JVM tests; every route was
+# verified against the deployed GitHub Pages site before being added here.
+
+docs_url() {
+    case "$1" in
+        "")                 printf '%s/' "$NOXS_DOCS_BASE" ;;
+        ai)                 printf '%s/ai/nx-ai/' "$NOXS_DOCS_BASE" ;;
+        ai-api-keys)        printf '%s/ai/api-keys/' "$NOXS_DOCS_BASE" ;;
+        ai-providers)       printf '%s/ai/providers/' "$NOXS_DOCS_BASE" ;;
+        android)            printf '%s/android/overview/' "$NOXS_DOCS_BASE" ;;
+        api)                printf '%s/reference/cli-reference/' "$NOXS_DOCS_BASE" ;;
+        architecture)       printf '%s/architecture/architecture/' "$NOXS_DOCS_BASE" ;;
+        backup)             printf '%s/environments/backup-restore/' "$NOXS_DOCS_BASE" ;;
+        cert-fix)           printf '%s/troubleshooting/certificate-errors/' "$NOXS_DOCS_BASE" ;;
+        changelog)          printf '%s/changelog/' "$NOXS_DOCS_BASE" ;;
+        cli|nx|commands)    printf '%s/reference/cli-reference/' "$NOXS_DOCS_BASE" ;;
+        code)               printf '%s/devtools/code-server/' "$NOXS_DOCS_BASE" ;;
+        devtools)           printf '%s/devtools/overview/' "$NOXS_DOCS_BASE" ;;
+        error-codes)        printf '%s/reference/error-codes/' "$NOXS_DOCS_BASE" ;;
+        faq)                printf '%s/getting-started/faq/' "$NOXS_DOCS_BASE" ;;
+        file-picker)        printf '%s/android/file-picker/' "$NOXS_DOCS_BASE" ;;
+        files|file-manager) printf '%s/files/file-browser/' "$NOXS_DOCS_BASE" ;;
+        gallery)            printf '%s/android/gallery/' "$NOXS_DOCS_BASE" ;;
+        getting-started)    printf '%s/getting-started/introduction/' "$NOXS_DOCS_BASE" ;;
+        installation)       printf '%s/getting-started/installation/' "$NOXS_DOCS_BASE" ;;
+        kali)               printf '%s/environments/kali-installation/' "$NOXS_DOCS_BASE" ;;
+        kali-config)        printf '%s/environments/kali-configuration/' "$NOXS_DOCS_BASE" ;;
+        network|vpn)        printf '%s/troubleshooting/network-errors/' "$NOXS_DOCS_BASE" ;;
+        notifications)      printf '%s/android/notifications/' "$NOXS_DOCS_BASE" ;;
+        packages|pkg|apt)   printf '%s/packages/package-manager/' "$NOXS_DOCS_BASE" ;;
+        permissions)        printf '%s/android/app-permissions/' "$NOXS_DOCS_BASE" ;;
+        plug|plugins|plugin-sdk) printf '%s/plugins/plugin-sdk/' "$NOXS_DOCS_BASE" ;;
+        rootfs)             printf '%s/environments/rootfs-management/' "$NOXS_DOCS_BASE" ;;
+        sdcard)             printf '%s/android/external-sdcard/' "$NOXS_DOCS_BASE" ;;
+        sdk)                printf '%s/reference/sdk-reference/' "$NOXS_DOCS_BASE" ;;
+        security)           printf '%s/architecture/security/' "$NOXS_DOCS_BASE" ;;
+        sessions)           printf '%s/terminal/sessions/' "$NOXS_DOCS_BASE" ;;
+        shortcuts)          printf '%s/terminal/shortcuts/' "$NOXS_DOCS_BASE" ;;
+        storage)            printf '%s/files/storage-access/' "$NOXS_DOCS_BASE" ;;
+        storage-permissions) printf '%s/android/storage-permissions/' "$NOXS_DOCS_BASE" ;;
+        switching)          printf '%s/environments/environment-switching/' "$NOXS_DOCS_BASE" ;;
+        terminal)           printf '%s/terminal/terminal-interface/' "$NOXS_DOCS_BASE" ;;
+        troubleshooting)    printf '%s/troubleshooting/common-questions/' "$NOXS_DOCS_BASE" ;;
+        ubuntu)             printf '%s/environments/ubuntu-installation/' "$NOXS_DOCS_BASE" ;;
+        ubuntu-config)      printf '%s/environments/ubuntu-configuration/' "$NOXS_DOCS_BASE" ;;
+        *)                  return 1 ;;
+    esac
+}
+
+docs_topics() {
+    printf '%s\n' "ai android api architecture backup cert-fix changelog cli code devtools" \
+        "faq files gallery getting-started installation kali network notifications" \
+        "packages permissions plug rootfs sdcard sdk security storage switching" \
+        "terminal troubleshooting ubuntu" | tr '\n' ' '
+    echo
+}
+
+docs_command() {
+    local topic="${1:-}" url
+    if [ "$topic" = "help" ] || [ "$topic" = "--help" ] || [ "$topic" = "-h" ]; then
+        printf 'Usage: noxs docs [topic]\nOpens the matching page on the Noxs documentation site and prints\nthe URL. Without a topic it opens the documentation home.\n\nTopics:\n  '
+        docs_topics
+        printf '  aliases: nx, commands, pkg, apt, plugins, plugin-sdk, file-manager, vpn\n\nDocumentation: %s/\n' "$NOXS_DOCS_BASE"
+        return 0
+    fi
+    if ! url="$(docs_url "$topic")"; then
+        err "unknown docs topic: $topic (valid topics below)"
+        printf '  ' >&2
+        docs_topics >&2
+        err "base documentation URL: $NOXS_DOCS_BASE/"
+        return 2
+    fi
+    # Try the Android browser through the bridge; the URL is ALWAYS printed
+    # somewhere (bridge reply or the fallback line below), so the command
+    # works even when no browser is reachable.
+    if bridge_request open-url "$url"; then
+        return 0
+    fi
+    printf 'Documentation: %s\n' "$url"
+}
+
+# ------------------------------------------------------------- noxs help
+# Centralized help: one registry below powers noxs help, noxs help <topic>,
+# noxs --help and the per-command usage blocks. Only commands that really
+# exist in this script (or in the nx CLI) are documented here.
+
+do_help() {
+    local topic="${1:-}"
+    case "$topic" in
+        "")
+            cat <<'HELP'
+Noxs Linux — Command Reference
+
+GENERAL
+  noxs help [topic]      this reference, or a detailed topic page
+  noxs version           Noxs app + userspace version
+  noxs info              environment overview (distro, storage, groups)
+  noxs status            environment health check
+  noxs update            apt update + upgrade (native Ubuntu APT)
+  noxs ubuntu status     Ubuntu identity + repository report
+  noxs device info|battery|storage   Android device report (non-identifying)
+
+STORAGE (SAF — the recommended access model)
+  noxs-setup-storage     pick the shared folder (Android folder picker)
+  noxs storage status    current folder access
+  noxs storage list      locations, capacity, mappings, mount state
+  noxs storage map <cat> pick a folder for one category
+  noxs storage grant --direct   Android all-files-access screen (optional)
+  noxs storage mount     opt-in /sdcard bind for NEW sessions
+  noxs help storage      full storage command reference
+
+FILES & DOCUMENTS
+  noxs files             open the Noxs file browser (Android UI)
+  noxs document open|import|export|gallery|picker
+  noxs share <file> | noxs share -t <text>
+  noxs camera [dest]
+  noxs clipboard get|set <text>
+
+DEVELOPMENT
+  noxs code install|start|stop|restart|status|logs   (VS Code server)
+  noxs docker install|start|stop|restart|status|info|test
+
+ANDROID INTEGRATION
+  noxs sms status|send|compose|contacts   (via your own SMS app)
+  noxs notification status|permission|post <title> [body...]
+  noxs network status
+
+PACKAGE MANAGEMENT (nx)
+  nx pkg init|build|install|search|list|remove|update|doctor
+  nx install <name>      nx cert-fix   nx update | nx remove
+
+PLUGINS & AI (nx)
+  nx plug [search|install|...]      Noxs Plugin Store
+  nx ai [task]                      Noxs AI agent
+
+DOCUMENTATION
+  noxs docs [topic]      open the documentation site (storage, ubuntu, kali,
+                         packages, plugins, android, terminal, api, security,
+                         troubleshooting, changelog, ...)
+
+SYSTEM HELPERS
+  noxs-service start|stop|restart|status [service]
+  noxs-socket list|test <path>
+  noxs-ps
+
+Usage: noxs help <topic>
+Documentation: https://crossberry-in.github.io/nxos-docs/
+HELP
+            ;;
+        storage)
+            storage_usage
+            ;;
+        setup-storage)
+            cat <<'HELP'
+NOXS SETUP STORAGE (noxs-setup-storage)
+
+Description:
+  Shortcut for 'noxs storage setup'. Opens Android's folder picker so you
+  grant Noxs access to exactly one folder (SAF document-tree access).
+
+Syntax:
+  noxs-setup-storage
+
+Arguments: none     Options: none
+
+Examples:
+  noxs-setup-storage
+
+Expected output:
+  Android shows the folder picker; after you choose a folder:
+  "Shared folder permission saved." followed by noxs storage status.
+
+Common errors:
+  Cancelled picker        -> "Folder access was cancelled or denied"
+  Read-only provider      -> "The selected folder is not writable"
+
+Related: noxs storage setup, noxs storage map, noxs storage status
+Documentation: https://crossberry-in.github.io/nxos-docs/files/storage-access/
+HELP
+            ;;
+        device)
+            cat <<'HELP'
+NOXS DEVICE
+
+Description:
+  Non-identifying Android device reports through the Noxs Android bridge.
+
+Syntax:
+  noxs device info | battery | storage
+
+Arguments:
+  info     model, Android version, ABIs, Noxs version (no ids/IMSI/SSID)
+  battery  level, charging state, power source, temperature
+  storage  internal capacity + shared-storage state
+
+Options: none
+
+Examples:
+  noxs device info
+  noxs device storage
+
+Expected output:
+  "Noxs device report (non-identifying)" or a capacity line per location.
+
+Common errors:
+  "Noxs Android bridge is unavailable" — open the Noxs terminal app first.
+
+Related: noxs storage list, noxs network status
+Documentation: https://crossberry-in.github.io/nxos-docs/android/overview/
+HELP
+            ;;
+        code)
+            cat <<'HELP'
+NOXS CODE (code-server / VS Code in the browser)
+
+Description:
+  Install and run code-server inside the Ubuntu userspace. Local-only:
+  binds 127.0.0.1, password generated into the config file, never logged.
+
+Syntax:
+  noxs code install | start | stop | restart | status [--json] | logs
+
+Arguments: see Syntax    Options: status --json (machine-readable)
+
+Examples:
+  noxs code install
+  noxs code start
+  noxs code status
+
+Expected output:
+  status prints installed version, state (running/stopped) and the local
+  address 127.0.0.1:8080.
+
+Common errors:
+  "code-server is not installed"   -> run: noxs code install
+  download failed during install   -> check the network, then retry
+
+Related: noxs docker status, nx ow
+Documentation: https://crossberry-in.github.io/nxos-docs/devtools/code-server/
+HELP
+            ;;
+        docker)
+            cat <<'HELP'
+NOXS DOCKER (compatibility mode — proot limitation applies)
+
+Description:
+  Install/run the Docker daemon inside the Ubuntu userspace. Container
+  execution may be UNSUPPORTED on some Android kernels — 'noxs docker test'
+  reports the truth, it never fakes success.
+
+Syntax:
+  noxs docker install | start | stop | restart | status | info | test
+
+Arguments: see Syntax    Options: none
+
+Examples:
+  noxs docker install
+  noxs docker start
+  noxs docker test
+
+Expected output:
+  status prints daemon state, storage, networking and container support.
+  test runs hello-world and records the real result.
+
+Common errors:
+  "Docker is not installed"          -> run: noxs docker install
+  "Container execution: unsupported" -> kernel limitation of proot sandboxes
+
+Related: noxs status
+Documentation: https://crossberry-in.github.io/nxos-docs/devtools/workflows/
+HELP
+            ;;
+        files)
+            cat <<'HELP'
+NOXS FILES
+
+Description:
+  Opens the Noxs file browser (Android UI) for Linux-home and SAF-backed
+  Android storage. The browser is the UI; shell-side SAF access stays in
+  'noxs storage'.
+
+Syntax:
+  noxs files
+
+Arguments: none    Options: none
+
+Examples:
+  noxs files
+
+Expected output:
+  "Noxs file browser opened" and the browser screen appears.
+
+Common errors:
+  "Noxs Android bridge is unavailable" — run it inside the Noxs terminal.
+  Nothing appears — keep the Noxs app in the foreground while running it.
+
+Related: noxs document picker, noxs storage ls, noxs-setup-storage
+Documentation: https://crossberry-in.github.io/nxos-docs/files/file-browser/
+HELP
+            ;;
+        document)
+            cat <<'HELP'
+NOXS DOCUMENT
+
+Description:
+  Explicit Android document transfers — every pick shows Android's own UI
+  and you choose exactly what Noxs may touch.
+
+Syntax:
+  noxs document open
+  noxs document import [dir] [--type MIME]
+  noxs document export <file> [name] [mime]
+  noxs document gallery [dest-file]
+  noxs document picker [dest-file]
+
+Arguments:
+  import   dir  destination under the Linux home (default: imports)
+  export   file Linux file to save on Android via the system save dialog
+  gallery  dest target file for the picked photo (default under Pictures)
+  picker   dest target file for the picked document
+
+Options:
+  import --type MIME    filter the picker by MIME type
+
+Examples:
+  noxs document import
+  noxs document export ~/report.pdf
+  noxs document gallery ~/Pictures/photo.jpg
+
+Expected output:
+  Transfer progress then "photo saved: <path>" / "document saved: <path>".
+
+Common errors:
+  "Document selection cancelled" — you closed Android's picker.
+
+Related: noxs files, noxs share, noxs storage get
+Documentation: https://crossberry-in.github.io/nxos-docs/android/file-picker/
+HELP
+            ;;
+        sms)
+            cat <<'HELP'
+NOXS SMS (system SMS app only — no SMS permission is held)
+
+Description:
+  Hands messages to YOUR SMS app; you press send there. Noxs never reads
+  messages and never sends automatically or in bulk.
+
+Syntax:
+  noxs sms status
+  noxs sms send <number> <message...>
+  noxs sms compose <number> <message...>
+  noxs sms contacts
+
+Arguments: number, message text   Options: none
+
+Examples:
+  noxs sms compose +15551234567 Hello from Noxs
+
+Expected output:
+  The system SMS app opens with the message prefilled; in-app confirmation
+  dialog appears first when sending directly.
+
+Common errors:
+  "Cancelled — no SMS was sent" (you declined the confirmation)
+  "No SMS app available on this device"
+
+Related: noxs device info
+Documentation: https://crossberry-in.github.io/nxos-docs/android/overview/
+HELP
+            ;;
+        notification)
+            cat <<'HELP'
+NOXS NOTIFICATION
+
+Description:
+  Post Android notifications from the terminal (needs POST_NOTIFICATIONS).
+
+Syntax:
+  noxs notification status
+  noxs notification permission
+  noxs notification post <title> [body...]
+
+Arguments:
+  post   title (required), body words (optional)
+
+Options: none
+
+Examples:
+  noxs notification status
+  noxs notification post build "Compile finished"
+
+Expected output:
+  "Notification posted: <title>" and the notification in the shade.
+
+Common errors:
+  "Notification permission not granted" -> run: noxs notification permission
+
+Related: noxs sms status
+Documentation: https://crossberry-in.github.io/nxos-docs/android/notifications/
+HELP
+            ;;
+        share)
+            cat <<'HELP'
+NOXS SHARE
+
+Description:
+  Send a file or text through the Android Sharesheet.
+
+Syntax:
+  noxs share <file>
+  noxs share -t <text>
+
+Arguments: a Linux file path, or -t plus text   Options: -t (share text)
+
+Examples:
+  noxs share ~/report.pdf
+  noxs share -t "Built with Noxs"
+
+Expected output:
+  "Sharesheet opened" and Android's share targets appear.
+
+Common errors:
+  "usage: noxs share <file> | noxs share -t <text>" — missing argument.
+
+Related: noxs document export
+Documentation: https://crossberry-in.github.io/nxos-docs/files/file-operations/
+HELP
+            ;;
+        camera)
+            cat <<'HELP'
+NOXS CAMERA
+
+Description:
+  Take one photo through the camera flow (runtime grant asked first).
+
+Syntax:
+  noxs camera [dest-file]
+
+Arguments: dest-file (default under Pictures with a timestamp)
+Options: none
+
+Examples:
+  noxs camera ~/Pictures/shot.jpg
+
+Expected output:
+  "photo saved: <path>" after the capture.
+
+Common errors:
+  "Camera capture cancelled" — you closed the camera.
+
+Related: noxs document gallery
+Documentation: https://crossberry-in.github.io/nxos-docs/android/gallery/
+HELP
+            ;;
+        clipboard)
+            cat <<'HELP'
+NOXS CLIPBOARD
+
+Description:
+  Read/write the Android clipboard (Android allows clipboard reads only
+  while Noxs is the foreground app).
+
+Syntax:
+  noxs clipboard get
+  noxs clipboard set <text>
+
+Arguments: text to set   Options: none
+
+Examples:
+  noxs clipboard set "token-free text"
+  noxs clipboard get
+
+Expected output:
+  set: "Clipboard set (<n> chars)"    get: the clipboard text itself.
+
+Common errors:
+  "Clipboard is empty or Android blocked the read" — foreground rule.
+
+Related: noxs share -t
+Documentation: https://crossberry-in.github.io/nxos-docs/terminal/customization/
+HELP
+            ;;
+        network)
+            cat <<'HELP'
+NOXS NETWORK
+
+Description:
+  Connectivity summary WITHOUT identifying details (no SSID, no ids).
+
+Syntax:
+  noxs network status
+
+Arguments: none    Options: none
+
+Examples:
+  noxs network status
+
+Expected output:
+  Connected / Transport / Metered / Internet lines.
+
+Common errors:
+  "Connectivity service unavailable" (device policy) — try again in Noxs.
+
+Related: noxs device storage, nx vpn status
+Documentation: https://crossberry-in.github.io/nxos-docs/troubleshooting/network-errors/
+HELP
+            ;;
+        info)
+            cat <<'HELP'
+NOXS INFO
+
+Description:
+  One-screen overview of the environment: distro identity, proot, session,
+  storage model, sudo policy, Android group note.
+
+Syntax:
+  noxs info
+
+Arguments: none    Options: none
+
+Examples:
+  noxs info
+
+Expected output:
+  "Noxs — Ubuntu 24.04 LTS userspace" plus per-facet lines and the
+  android-groups explanation (inherited Android GIDs are cosmetic).
+
+Common errors: none (read-only command).
+
+Related: noxs status, noxs version, noxs ubuntu status
+Documentation: https://crossberry-in.github.io/nxos-docs/getting-started/quick-start/
+HELP
+            ;;
+        status)
+            cat <<'HELP'
+NOXS STATUS
+
+Description:
+  Health check: Ubuntu os-release identity, apt, sources, certificates,
+  bootstrap state. Exit code 1 when a FAIL line appears.
+
+Syntax:
+  noxs status
+
+Arguments: none    Options: none
+
+Examples:
+  noxs status
+
+Expected output:
+  "Noxs status" block; WARN rows suggest the matching repair command
+  (usually: nx cert-fix).
+
+Common errors:
+  "apt sources: WARN" / "certificates: WARN" -> run: nx cert-fix
+
+Related: noxs update, nx cert-fix, noxs ubuntu status
+Documentation: https://crossberry-in.github.io/nxos-docs/troubleshooting/certificate-errors/
+HELP
+            ;;
+        update)
+            cat <<'HELP'
+NOXS UPDATE
+
+Description:
+  Refresh APT metadata and upgrade the Ubuntu userspace tools through the
+  native APT environment.
+
+Syntax:
+  noxs update
+
+Arguments: none    Options: none
+
+Examples:
+  noxs update
+
+Expected output:
+  apt-get update output, then the upgrade run to completion.
+
+Common errors:
+  "apt-get update failed — check the network connection" — retry online,
+  or run: nx cert-fix when certificates are the cause.
+
+Related: nx pkg update --full, noxs status
+Documentation: https://crossberry-in.github.io/nxos-docs/environments/linux-package-management/
+HELP
+            ;;
+        ubuntu)
+            cat <<'HELP'
+NOXS UBUNTU
+
+Description:
+  Ubuntu-specific identity and repository report (the primary Noxs
+  distribution).
+
+Syntax:
+  noxs ubuntu status
+
+Arguments: status (default)   Options: none
+
+Examples:
+  noxs ubuntu status
+
+Expected output:
+  pretty name, version, codename, kernel, arch, apt sources, keyring and
+  package-index state.
+
+Common errors:
+  "keyring: FAIL" or "package index: EMPTY" -> run: nx cert-fix / nx pkg update
+
+Related: noxs status, noxs update
+Documentation: https://crossberry-in.github.io/nxos-docs/environments/ubuntu-configuration/
+HELP
+            ;;
+        version)
+            cat <<'HELP'
+NOXS VERSION
+
+Description:
+  Print the Noxs app version and the userspace identity.
+
+Syntax:
+  noxs version
+
+Arguments: none    Options: none
+
+Examples:
+  noxs version
+
+Expected output:
+  "Noxs <app-version> — Ubuntu 24.04 LTS userspace (aarch64)". Without the
+  Android bridge the userspace identity is still printed.
+
+Common errors: none.
+
+Related: noxs info, noxs device info
+Documentation: https://crossberry-in.github.io/nxos-docs/changelog/
+HELP
+            ;;
+        docs)
+            cat <<'HELP'
+NOXS DOCS
+
+Description:
+  Open the Noxs documentation site in the Android browser; the URL is
+  always printed so the link works offline too.
+
+Syntax:
+  noxs docs [topic]
+
+Arguments: topic (optional; see the list below)
+Options: none
+
+Examples:
+  noxs docs
+  noxs docs storage
+  noxs docs ubuntu
+  noxs docs kali
+
+Expected output:
+  "Opening documentation: <url>" (browser) or "Documentation: <url>".
+
+Common errors:
+  "unknown docs topic" — valid topics are listed in the error output.
+
+Related: noxs help <topic>
+Documentation: https://crossberry-in.github.io/nxos-docs/
+HELP
+            ;;
+        pkg|install)
+            cat <<'HELP'
+NX PKG / NX INSTALL (NX Package System — provided by the nx CLI)
+
+Description:
+  Noxs package management: init from language templates, build, install
+  with live progress, search across cache/API/distro/registry.
+
+Syntax:
+  nx pkg init <name> [--node|--rust|--cpp|--python|--go]
+  nx pkg build | release | deploy | info | search | install | update | list | remove | doctor
+  nx install <name>[@version]
+  nx install -git @user/repo[@version]
+
+Arguments: package names, template flags   Options: nx pkg update --full
+
+Examples:
+  nx pkg init my-tool --python
+  nx pkg install curl
+  nx install -git @user/repo
+
+Expected output:
+  Branded installer progress lines; 'nx pkg doctor' health summary.
+
+Common errors:
+  "Unknown nx pkg command" — run: nx pkg (shows the valid subcommands).
+
+Related: nx cert-fix, noxs update
+Documentation: https://crossberry-in.github.io/nxos-docs/packages/package-manager/
+HELP
+            ;;
+        plug)
+            cat <<'HELP'
+NX PLUG (Noxs Plugin Store — provided by the nx CLI)
+
+Description:
+  Discover, install and manage Noxs plugins. Plugins run with explicit
+  permission boundaries declared in their manifest.
+
+Syntax:
+  nx plug                       open the Plugin Store UI
+  nx plug search <query> | list | info <id>
+  nx plug install|update|uninstall <id>
+  nx plug enable|disable <id>
+
+Arguments: plugin ids / queries   Options: none
+
+Examples:
+  nx plug search editor
+  nx plug install <plugin-id>
+
+Expected output:
+  Store UI opens (no subcommand) or the matching plugin report.
+
+Common errors:
+  Unknown subcommand — run: nx plug (bare) to see the store.
+
+Related: nx pkg, nx ai
+Documentation: https://crossberry-in.github.io/nxos-docs/plugins/plugin-sdk/
+HELP
+            ;;
+        ai)
+            cat <<'HELP'
+NX AI (Noxs AI Agent — provided by the nx CLI)
+
+Description:
+  Interactive AI agent terminal (nx@ai>) or one-shot tasks. Provider/API
+  keys are configured by the user and are never printed by the CLI.
+
+Syntax:
+  nx ai                interactive session
+  nx ai "task"         one-shot task
+
+Arguments: a task string   Options: none (interactive mode has commands)
+
+Examples:
+  nx ai
+  nx ai "summarize this repo's package.json"
+
+Expected output:
+  The nx@ai> prompt, or the one-shot answer, then exit.
+
+Common errors:
+  Missing provider configuration — see the AI configuration page below.
+
+Related: nx plug, nx pkg
+Documentation: https://crossberry-in.github.io/nxos-docs/ai/nx-ai/
+HELP
+            ;;
+        cert-fix)
+            cat <<'HELP'
+NX CERT-FIX (provided by the nx CLI)
+
+Description:
+  Repair APT sources and CA certificates, and install curl/wget. Helps
+  environments whose app-side bootstrap never completed — no reinstall.
+
+Syntax:
+  nx cert-fix
+
+Arguments: none    Options: none
+
+Examples:
+  nx cert-fix
+
+Expected output:
+  Signed-HTTP fallback for apt-get update, CA bundle regeneration,
+  curl/wget installation, then a summary.
+
+Common errors:
+  Persistent failures mean the network itself is down — retry online.
+
+Related: noxs status, noxs update
+Documentation: https://crossberry-in.github.io/nxos-docs/troubleshooting/certificate-errors/
+HELP
+            ;;
+        help|--help|-h)
+            cat <<'HELP'
+Usage: noxs help [topic]
+
+Topics: storage setup-storage device code docker files document sms
+        notification share camera clipboard network info status update
+        ubuntu version docs pkg install plug ai cert-fix
+
+Documentation: https://crossberry-in.github.io/nxos-docs/
+HELP
+            ;;
+        *)
+            err "no help topic: $topic (try: noxs help)"
+            exit 2
+            ;;
+    esac
+}
+
 case "${1:-help}" in
+    help|--help|-h)
+        shift
+        do_help "${1:-}"
+        ;;
+    docs)
+        shift
+        docs_command "$@"
+        ;;
+    version|--version)
+        do_version
+        ;;
     code)
         case "${2:-status}" in
             install) shift 2; code_install "$@" ;;
@@ -1471,12 +2299,10 @@ case "${1:-help}" in
             *) err "usage: noxs ubuntu status"; exit 2 ;;
         esac
         ;;
-    help|--help|-h)
-        sed -n '2,21p' "$0"
-        ;;
     *)
-        # Forward legacy aliases so 'noxs-service start ssh' works as 'noxs service'
+        # Unknown command: suggest the closest valid entry points + docs URL.
         err "unknown command: $1 (try: noxs help)"
+        err "or run: noxs help | noxs docs  —  docs: $NOXS_DOCS_BASE/"
         exit 2
         ;;
 esac
