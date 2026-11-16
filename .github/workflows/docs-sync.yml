@@ -33,9 +33,6 @@ on:
 permissions:
   contents: read
 
-env:
-  HAS_DOCS_TOKEN: ${{ secrets.DOCS_SYNC_TOKEN != '' }}
-
 jobs:
   validate:
     name: Validate documentation metadata
@@ -85,6 +82,9 @@ jobs:
     needs: validate
     # Runs only when a fine-grained token is configured; otherwise the
     # validate job artifacts carry the review task list.
+    # Job-level env is the supported place to test a secret for existence.
+    env:
+      HAS_DOCS_TOKEN: ${{ secrets.DOCS_SYNC_TOKEN != '' }}
     if: github.event_name == 'push' && env.HAS_DOCS_TOKEN == 'true'
     runs-on: ubuntu-latest
     permissions:
