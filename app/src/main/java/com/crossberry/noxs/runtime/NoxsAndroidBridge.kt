@@ -125,12 +125,12 @@ object NoxsAndroidBridge {
                 appendLine("Metered:   ${if (metered) "yes (data-capped)" else "no"}")
                 appendLine("Internet:  ${if (validated) "validated by Android" else "not validated"}")
             }
-            appendLine("No identifiers (SSID/IMEI/credentials) are ever reported.")
+            appendLine("No identifying details (network name, device ids, credentials) are ever reported.")
         }.trimEnd()
 
     fun capacityLine(label: String, totalBytes: Long, freeBytes: Long): String {
         fun gb(bytes: Long) = "%.1f GB".format(bytes / 1024.0 / 1024.0 / 1024.0)
-        return "$label: $freeBytes of ${gb(totalBytes)} free (${gb(totalBytes)} total)"
+        return "$label: ${gb(freeBytes)} free (${gb(totalBytes)} total)"
     }
 }
 
