@@ -333,15 +333,27 @@ class StorageActivity : AppCompatActivity() {
     private fun confirmDirectMountToggle() {
         val mount = com.crossberry.noxs.runtime.NoxsStorageMount
         if (!mount.isDirectStorageReady()) {
-            runCatching {
-                startActivity(
-                    android.content.Intent(
-                        com.crossberry.noxs.runtime.NoxsAndroidPermissions.ALL_FILES_ACTION,
-                        android.net.Uri.parse("package:$packageName")
+            // App-specific Settings screen first; generic list as fallback.
+            val appSpecific = android.content.Intent(
+                com.crossberry.noxs.runtime.NoxsAndroidPermissions.ALL_FILES_APP_ACTION,
+                android.net.Uri.parse("package:$packageName")
+            )
+            val generic = android.content.Intent(
+                com.crossberry.noxs.runtime.NoxsAndroidPermissions.ALL_FILES_ACTION
+            )
+            val opened = runCatching { startActivity(appSpecific) }
+                .fold(onSuccess = { true }, onFailure = {
+                    runCatching { startActivity(generic) }.fold(
+                        onSuccess = { true },
+                        onFailure = { false }
                     )
-                )
-            }.onFailure {
-                Toast.makeText(this, "All-files-access screen unavailable on this device", Toast.LENGTH_LONG).show()
+                })
+            if (!opened) {
+                Toast.makeText(
+                    this,
+                    "All-files-access screen unavailable on this device — open Settings > Apps > Noxs > Files and media, or use SAF (recommended)",
+                    Toast.LENGTH_LONG
+                ).show()
             }
             return
         }

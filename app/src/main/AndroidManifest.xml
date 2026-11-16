@@ -44,6 +44,24 @@
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
 
+    <!--
+      noxs docs deep links: on Android 11+ an ACTION_VIEW https intent can
+      only be resolved (and checked for a handler) when the browser is
+      declared here. Package visibility only — no permission is requested.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="http" />
+        </intent>
+    </queries>
+
     <application
         android:name=".NoxsApplication"
         android:allowBackup="false"

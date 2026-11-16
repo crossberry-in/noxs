@@ -84,4 +84,11 @@ object NoxsAndroidPermissions {
 
     /** Android 11+ All-files-access: a Settings screen, never a silent grant. */
     const val ALL_FILES_ACTION = android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
+
+    /**
+     * App-specific All-files-access Settings screen (directly shows Noxs).
+     * Not every OEM resolves it — callers must fall back to [ALL_FILES_ACTION].
+     */
+    const val ALL_FILES_APP_ACTION =
+        android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION
 }

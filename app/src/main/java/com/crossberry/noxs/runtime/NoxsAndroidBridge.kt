@@ -85,7 +85,7 @@ object NoxsAndroidBridge {
 
     /** Operations that MUST be executed by the foreground activity (UI). */
     val uiOperations: Set<String> = setOf(
-        "ui-files", "ui-storage",
+        "ui-files", "ui-storage", "open-url",
         "doc-open", "doc-import", "doc-export", "doc-gallery", "doc-pick",
         "camera", "share-file", "share-text",
         "sms-send", "sms-compose", "sms-contacts",
@@ -226,6 +226,7 @@ class NoxsAndroidBridgeHost(private val context: Context, private val paths: Nox
         return try {
             when (request.operation) {
                 "" -> err("Empty bridge request")
+                "app-version" -> ok(appVersion())
                 "perm-status" -> permStatus(request.arg(1).ifEmpty { "all" })
                 "device-info" -> deviceInfo()
                 "device-battery" -> batteryInfo()
@@ -252,6 +253,14 @@ class NoxsAndroidBridgeHost(private val context: Context, private val paths: Nox
     private fun ok(text: String) = NoxsAndroidBridge.CommandResult(true, text)
     private fun err(text: String) = NoxsAndroidBridge.CommandResult(false, text)
 
+    /** App versionName (deviceInfo also reports it; this op returns it bare). */
+    fun appVersion(): String = try {
+        val info = appContext.packageManager.getPackageInfo(appContext.packageName, 0)
+        info.versionName ?: "unknown"
+    } catch (_: Exception) {
+        "unknown"
+    }
+
     private fun permStatus(which: String): NoxsAndroidBridge.CommandResult {
         val text = if (which == "all") NoxsAndroidPermissions.statusAllText(appContext)
         else {
@@ -271,10 +280,7 @@ class NoxsAndroidBridgeHost(private val context: Context, private val paths: Nox
             sdkInt = Build.VERSION.SDK_INT,
             release = Build.VERSION.RELEASE ?: "unknown",
             abis = Build.SUPPORTED_ABIS.orEmpty().toList(),
-            appVersion = try {
-                val info = appContext.packageManager.getPackageInfo(appContext.packageName, 0)
-                info.versionName ?: "unknown"
-            } catch (_: Exception) { "unknown" }
+            appVersion = appVersion()
         )
     )
 
@@ -397,6 +403,14 @@ class NoxsAndroidBridgeHost(private val context: Context, private val paths: Nox
             appendLine("Noxs never reads messages and never sends automatically or in bulk.")
         }.trimEnd()
     )
+
+    /** Returns the ACTION_VIEW intent for an already-guard-checked URL.
+     *  Null when no browser/handler exists on the device (caller prints the
+     *  URL instead — never a dead-end). */
+    fun viewIntent(url: String): Intent? =
+        Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).let { intent ->
+            if (intent.resolveActivity(appContext.packageManager) != null) intent else null
+        }
 
     private fun mountSet(enabled: Boolean): NoxsAndroidBridge.CommandResult {
         NoxsStorageMount.setEnabled(appContext, enabled)

@@ -1102,6 +1102,10 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                 startActivity(Intent(this, StorageActivity::class.java))
                 completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(true, "Noxs storage dashboard opened"))
             }
+            "open-url" -> {
+                pendingBridgeUi = null
+                openBridgeUrl(request)
+            }
             "doc-open", "doc-pick" -> launchBridgeDocumentPick(request, multi = request.operation == "doc-pick")
             "doc-import" -> launchBridgeDocumentPick(request, multi = true)
             "doc-export" -> launchBridgeExport(request)
@@ -1168,13 +1172,27 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                 } else requestBridgePermissions(request, perm)
             }
             "mount-grant" -> {
-                runCatching {
-                    bridgeSystemUiLauncher.launch(
-                        Intent(NoxsAndroidPermissions.ALL_FILES_ACTION, Uri.parse("package:$packageName"))
-                    )
-                }.getOrElse {
-                    pendingBridgeUi = null
-                    completeBridgeRequest(request.id, NoxsAndroidBridge.CommandResult(false, "All-files-access screen unavailable"))
+                // App-specific Settings screen first (shows Noxs directly);
+                // fall back to the generic all-files-access list, then report
+                // SAF as the recommended path — direct access stays optional.
+                val appSpecific = Intent(
+                    NoxsAndroidPermissions.ALL_FILES_APP_ACTION,
+                    Uri.parse("package:$packageName")
+                )
+                val generic = Intent(NoxsAndroidPermissions.ALL_FILES_ACTION)
+                runCatching { bridgeSystemUiLauncher.launch(appSpecific) }.getOrElse {
+                    runCatching { bridgeSystemUiLauncher.launch(generic) }.getOrElse {
+                        pendingBridgeUi = null
+                        completeBridgeRequest(
+                            request.id,
+                            NoxsAndroidBridge.CommandResult(
+                                false,
+                                "All-files-access screen unavailable on this device. " +
+                                    "Open Android Settings > Apps > Noxs > Files and media manually, " +
+                                    "or use SAF instead (recommended): noxs storage setup"
+                            )
+                        )
+                    }
                 }
             }
             else -> {
@@ -1392,7 +1410,23 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                 }
             }
             "mount-grant" -> {
-                completeBridgeRequest(pending.requestId, NoxsAndroidBridge.CommandResult(true, NoxsStorageMount.statusText(this)))
+                // Recheck the grant AFTER returning from Settings — never
+                // assume the user toggled it (truthful reporting).
+                val ready = NoxsStorageMount.isDirectStorageReady()
+                val status = NoxsStorageMount.statusText(this)
+                val outcome = if (ready) {
+                    NoxsAndroidBridge.CommandResult(
+                        true,
+                        "All-files access granted.\n$status\nNext step: run 'noxs storage mount' to enable the /sdcard bind for NEW sessions."
+                    )
+                } else {
+                    NoxsAndroidBridge.CommandResult(
+                        false,
+                        "All-files access is still not granted — Android Settings was closed without the toggle.\n" +
+                            "SAF is the recommended alternative: noxs storage setup\n$status"
+                    )
+                }
+                completeBridgeRequest(pending.requestId, outcome)
             }
             "sms-contacts" -> {
                 val uri = result.data?.data
@@ -1422,6 +1456,43 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
                 }
             }
             else -> completeBridgeRequest(pending.requestId, NoxsAndroidBridge.CommandResult(false, "Bridge operation cancelled"))
+        }
+    }
+
+    /** Opens a guard-checked URL (noxs docs) in the Android browser; the URL
+     *  is always part of the reply so the terminal shows it even offline. */
+    private fun openBridgeUrl(request: NoxsAndroidBridge.Request) {
+        val url = request.arg(1)
+        when (val decision = com.crossberry.noxs.runtime.NoxsUrlGuard.check(url)) {
+            is com.crossberry.noxs.runtime.NoxsUrlGuard.Decision.Rejected -> {
+                completeBridgeRequest(
+                    request.id,
+                    NoxsAndroidBridge.CommandResult(false, "URL blocked by Noxs policy (${decision.reason})")
+                )
+            }
+            is com.crossberry.noxs.runtime.NoxsUrlGuard.Decision.Allowed -> {
+                val intent = androidBridge.viewIntent(decision.url)
+                if (intent == null) {
+                    completeBridgeRequest(
+                        request.id,
+                        NoxsAndroidBridge.CommandResult(false, "No browser app available. URL: ${decision.url}")
+                    )
+                } else {
+                    runCatching { startActivity(intent) }
+                        .onSuccess {
+                            completeBridgeRequest(
+                                request.id,
+                                NoxsAndroidBridge.CommandResult(true, "Opening documentation: ${decision.url}")
+                            )
+                        }
+                        .onFailure {
+                            completeBridgeRequest(
+                                request.id,
+                                NoxsAndroidBridge.CommandResult(false, "Browser could not start. URL: ${decision.url}")
+                            )
+                        }
+                }
+            }
         }
     }
 
