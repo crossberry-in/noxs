@@ -22,7 +22,8 @@ class RootfsIntegrityTest {
 
     private fun root(): File = tmp.newFolder("rootfs")
 
-    /** Builds a structurally healthy rootfs (files + symlinks; no apt layer). */
+    /** Builds a structurally healthy rootfs that SHIPS /lib64 (the tolerant
+     *  usr-merge variant; files + symlinks; no apt layer). */
     private fun healthyRootfs(root: File) {
         File(root, "usr/bin").mkdirs()
         File(root, "usr/sbin").mkdirs()
@@ -51,6 +52,79 @@ class RootfsIntegrityTest {
         File(root, "usr/local/bin/sudo").setExecutable(true)
         File(root, "usr/bin/su").writeText("#!/bin/sh\n")
         File(root, "usr/bin/su").setExecutable(true)
+    }
+
+    /**
+     * Builds the GENUINE Ubuntu 24.04 arm64 base layout — exactly what the
+     * release tarball ships (verified: `tar -tzf` + PT_INTERP of ./usr/bin/ls):
+     * /bin /sbin /lib usr-merge symlinks, the /lib/ld-linux-aarch64.so.1
+     * interpreter chain, and NO /lib64 or /usr/lib64 anywhere. The v1.4.0
+     * gate regression failed setup on exactly this layout.
+     */
+    private fun arm64BaseRootfs(root: File) {
+        File(root, "usr/bin").mkdirs()
+        File(root, "usr/sbin").mkdirs()
+        File(root, "usr/lib/aarch64-linux-gnu").mkdirs()
+        File(root, "usr/local/bin").mkdirs()
+        File(root, "usr/bin/dash").writeText("dash")
+        Files.createSymbolicLink(File(root, "usr/bin/sh").toPath(), java.nio.file.Paths.get("dash"))
+        File(root, "usr/bin/bash").writeText("bash")
+        File(root, "usr/bin/env").writeText("env")
+        File(root, "usr/bin/clear").writeText("clear")
+        File(root, "usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1").writeText("loader")
+        Files.createSymbolicLink(File(root, "bin").toPath(), java.nio.file.Paths.get("usr/bin"))
+        Files.createSymbolicLink(File(root, "sbin").toPath(), java.nio.file.Paths.get("usr/sbin"))
+        Files.createSymbolicLink(File(root, "lib").toPath(), java.nio.file.Paths.get("usr/lib"))
+        Files.createSymbolicLink(
+            File(root, "usr/lib/ld-linux-aarch64.so.1").toPath(),
+            java.nio.file.Paths.get("aarch64-linux-gnu/ld-linux-aarch64.so.1")
+        )
+        File(root, "usr/local/bin/sudo").writeText("#!/bin/sh\nexec \"\$@\"\n")
+        File(root, "usr/local/bin/sudo").setExecutable(true)
+        File(root, "usr/bin/su").writeText("#!/bin/sh\n")
+        File(root, "usr/bin/su").setExecutable(true)
+    }
+
+    @Test
+    fun `genuine arm64 base image without lib64 verifies clean`() {
+        val root = root()
+        arm64BaseRootfs(root)
+        val report = RootfsIntegrity.verify(root)
+        assertTrue(report.healthy)
+        assertTrue(report.structuralDamage.isEmpty())
+        assertTrue(report.missingExecutables.isEmpty())
+        assertTrue(report.missingShims.isEmpty())
+        // Regression for the v1.4.0 setup blocker: absence of /lib64 is the
+        // correct arm64 layout and must never be reported as damage.
+        assertTrue(report.rows.none { !it.ok && it.path == "/lib64" })
+        assertTrue(report.rows.first { it.path == "/lib64" }.ok)
+        assertTrue(report.rows.first { it.path == "/lib/ld-linux-aarch64.so.1" }.ok)
+    }
+
+    @Test
+    fun `arm64 base with stale placeholder is structural and repair heals it`() {
+        val root = root()
+        arm64BaseRootfs(root)
+        Files.delete(File(root, "bin").toPath())
+        File(root, "bin").writeText("") // historical extraction poison
+        val report = RootfsIntegrity.verify(root)
+        assertFalse(report.healthy)
+        assertTrue(report.structuralDamage.contains("/bin"))
+        val applied = RootfsIntegrity.repair(root)
+        assertTrue(applied.any { it.contains("/bin") })
+        assertTrue(RootfsIntegrity.verify(root).healthy)
+    }
+
+    @Test
+    fun `arm64 interpreter path break is structural damage`() {
+        val root = root()
+        arm64BaseRootfs(root)
+        Files.delete(File(root, "usr/lib/ld-linux-aarch64.so.1").toPath())
+        val report = RootfsIntegrity.verify(root)
+        assertFalse(report.healthy)
+        // Both the loader link and the PT_INTERP path every arm64 ELF uses.
+        assertTrue(report.structuralDamage.any { it == "/usr/lib/ld-linux-aarch64.so.1" })
+        assertTrue(report.structuralDamage.any { it == "/lib/ld-linux-aarch64.so.1" })
     }
 
     @Test

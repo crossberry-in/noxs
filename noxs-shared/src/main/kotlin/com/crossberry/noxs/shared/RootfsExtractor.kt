@@ -163,10 +163,21 @@ class RootfsExtractor(private val root: File) {
                 }
                 link.parentFile?.let { ensureDirectory(it) }
                 val linkPath = link.toPath()
-                // Remove any existing file, broken symlink, or empty directory at linkPath
+                // Clear the link path before creating the archive-declared
+                // symlink: files, broken symlinks AND stale directories all
+                // get replaced. A non-empty directory at a tar symlink path
+                // can only be poison from an older interrupted extraction
+                // (the archive declares this path a symlink, so a real dir
+                // is never valid base-image content, and archive-controlled
+                // system link paths never hold user data — see
+                // docs/SECURITY.md). Files.delete alone would fail with
+                // DirectoryNotEmptyException and the link would silently
+                // stay broken until the next integrity pass.
                 runCatching {
-                    if (Files.isSymbolicLink(linkPath) || Files.exists(linkPath)) {
-                        Files.delete(linkPath)
+                    when {
+                        Files.isSymbolicLink(linkPath) -> Files.delete(linkPath)
+                        Files.isDirectory(linkPath) -> link.deleteRecursively()
+                        Files.exists(linkPath) -> Files.delete(linkPath)
                     }
                 }
                 try {

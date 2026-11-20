@@ -596,9 +596,10 @@ object RootfsConfigurator {
 
     private fun repairZeroByteSymlinks(rootfs: File) {
         // The full safe-repair set now lives in RootfsIntegrity.repair (FHS
-        // links incl. /lib64, /usr/bin/sh + awk, the complete aarch64 loader
-        // chain, su/sudo shims) — kept in one place so the session-start
-        // repair, the diagnostics UI and the guest-side doctor agree.
+        // links incl. the optional /lib64 when an image ships it, /usr/bin/sh
+        // + awk, the /lib/ld-linux-aarch64.so.1 arm64 interpreter chain,
+        // su/sudo shims) — kept in one place so the session-start repair,
+        // the diagnostics UI and the guest-side doctor agree.
         RootfsIntegrity.repair(rootfs)
         // Repair 0-byte shared library SONAME placeholders (e.g. libtinfo.so.6 -> libtinfo.so.6.4)
         val usrLib = File(rootfs, "usr/lib")

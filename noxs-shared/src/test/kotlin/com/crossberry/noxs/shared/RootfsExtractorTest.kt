@@ -2,6 +2,7 @@ package com.crossberry.noxs.shared
 
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Rule
@@ -172,6 +173,38 @@ class RootfsExtractorTest {
         assertEquals(2, RootfsLinkQueue.size())
         assertTrue(java.nio.file.Files.isSymbolicLink(File(root, "etc/alternatives/awk").toPath()))
         assertTrue(java.nio.file.Files.isSymbolicLink(File(root, "usr/bin/awk").toPath()))
+    }
+
+    @Test fun `stale directory at a symlink member path is replaced by the archive symlink`() {
+        // Regression: an older interrupted extraction can leave a REAL
+        // directory (with junk inside) at a path the archive declares a
+        // symlink. Files.delete alone fails with DirectoryNotEmptyException
+        // and the link silently stays broken until the integrity pass.
+        val root = tmp.newFolder("rootfs")
+        val poison = File(root, "lib")
+        poison.mkdirs()
+        File(poison, "junk").writeText("stale")
+        val tar = tarEntries(
+            dirEntry("usr/lib"),
+            fileEntry("usr/lib/real", "payload"),
+            linkEntry("lib", "usr/lib")
+        )
+        RootfsExtractor(root).extract(writeGzip(tar))
+        assertTrue(java.nio.file.Files.isSymbolicLink(File(root, "lib").toPath()))
+        assertEquals("payload", File(root, "usr/lib/real").readText())
+        // The poison content is gone with the directory it lived in.
+        assertFalse(java.nio.file.Files.exists(File(root, "usr/lib/junk").toPath()))
+    }
+
+    @Test fun `stale file at a symlink member path is replaced by the archive symlink`() {
+        val root = tmp.newFolder("rootfs")
+        File(root, "lib").writeText("") // the historical 0-byte placeholder
+        val tar = tarEntries(
+            dirEntry("usr/lib"),
+            linkEntry("lib", "usr/lib")
+        )
+        RootfsExtractor(root).extract(writeGzip(tar))
+        assertTrue(java.nio.file.Files.isSymbolicLink(File(root, "lib").toPath()))
     }
 
     @Test fun `safeResolve rejects NUL and drive letters`() {

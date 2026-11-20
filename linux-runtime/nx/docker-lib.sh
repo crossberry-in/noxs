@@ -175,7 +175,7 @@ nx_docker_doctor_cmd() {
         rootfs_ok=0; rootfs_issues="${rootfs_issues:+$rootfs_issues; }/bin broken"
     fi
     if [ -e "$(dd_path /lib64/ld-linux-aarch64.so.1)" ] || [ -e "$(dd_path /usr/lib/ld-linux-aarch64.so.1)" ]; then
-        nx_dd_row PASS "Rootfs loader chain (/lib64/ld-linux-aarch64.so.1)"
+        nx_dd_row PASS "Rootfs loader chain (arm64 ELF interpreter resolves)"
     elif [ -f "$(dd_path /usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1)" ]; then
         nx_dd_row FAIL "Rootfs loader link missing (real loader exists)" "run: nx docker repair — every ELF exec fails with ENOENT"
         rootfs_ok=0; rootfs_issues="${rootfs_issues:+$rootfs_issues; }loader link missing"

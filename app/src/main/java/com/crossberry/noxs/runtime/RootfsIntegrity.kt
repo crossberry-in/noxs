@@ -7,8 +7,20 @@
  *
  *  - A missing ELF can simply be absent (partial extraction, package
  *    removal, sandbox reset) — OR present-but-unexecutable because the
- *    dynamic loader chain (/lib64/ld-linux-aarch64.so.1 -> ...) is a
+ *    dynamic loader chain (/lib/ld-linux-aarch64.so.1 -> ...) is a
  *    0-byte placeholder left by an interrupted extraction.
+ *
+ *  LAYOUT TRUTH (verified against the shipped noxs-ubuntu-24.04-arm64
+ *  tarball: `tar -tzf` + PT_INTERP parse of ./usr/bin/ls):
+ *    - aarch64 ELFs hard-code PT_INTERP = /lib/ld-linux-aarch64.so.1
+ *    - the base image ships /bin /sbin /lib as usr-merge symlinks and
+ *      usr/lib/ld-linux-aarch64.so.1 -> aarch64-linux-gnu/ld-linux-aarch64.so.1
+ *    - it ships NO /lib64 and NO usr/lib64 at all — lib64 is an x86-64
+ *      concept. An earlier gate revision demanded /lib64 and failed setup
+ *      on every genuine arm64 rootfs (false positive: exactly the trio
+ *      /lib64, /usr/lib64/ld-linux-aarch64.so.1, /lib64/ld-linux-aarch64.so.1).
+ *    /lib64 is therefore OPTIONAL here: checked for health when present,
+ *      never demanded when absent.
  *  - /usr/local/bin/sudo is a Noxs-written shim (RootfsConfigurator); a
  *    configure() step that aborted before installSuAndSudo leaves it missing.
  *
@@ -62,6 +74,14 @@ object RootfsIntegrity {
     private const val BIN = "bin"
     private const val SBIN = "sbin"
     private const val LIB = "lib"
+
+    /**
+     * OPTIONAL FHS link. Genuine Ubuntu/Debian arm64 base images ship no
+     * /lib64 (the arm64 interpreter lives at /lib/ld-linux-aarch64.so.1);
+     * requiring it was a false positive that blocked every real arm64
+     * setup. When an image does ship it, it must be a healthy usr-merge
+     * symlink, never a placeholder or real directory.
+     */
     private const val LIB64 = "lib64"
 
     /**
@@ -73,23 +93,18 @@ object RootfsIntegrity {
 
     private val LOADER_LINKS = listOf(
         LoaderLink(
+            // The aarch64 interpreter chain: /lib/ld-linux-aarch64.so.1 is
+            // the PT_INTERP baked into every arm64 ELF; it resolves through
+            // /lib -> usr/lib to this link, then to the real multiarch
+            // loader. Verified against the Ubuntu 24.04 arm64 base image.
             link = "usr/lib/ld-linux-aarch64.so.1",
             real = "usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
             lnTarget = "aarch64-linux-gnu/ld-linux-aarch64.so.1"
-        ),
-        LoaderLink(
-            // Real Ubuntu usr-merge layout: usr/lib64/ld-linux-aarch64.so.1 ->
-            // ../lib/aarch64-linux-gnu/ld-linux-aarch64.so.1, and /lib64 ->
-            // usr/lib64 carries it to the /lib64/ld-linux-aarch64.so.1
-            // interpreter path baked into every arm64 ELF.
-            link = "usr/lib64/ld-linux-aarch64.so.1",
-            real = "usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
-            lnTarget = "../lib/aarch64-linux-gnu/ld-linux-aarch64.so.1"
         )
     )
 
-    /** The interpreter path every arm64 ELF hard-codes at exec time. */
-    private const val ELF_INTERP = "lib64/ld-linux-aarch64.so.1"
+    /** The interpreter path every arm64 ELF hard-codes at exec time (PT_INTERP). */
+    private const val ELF_INTERP = "lib/ld-linux-aarch64.so.1"
 
     /** System executables that must exist in every healthy Ubuntu userspace. */
     val REQUIRED_EXECUTABLES = listOf(
@@ -113,7 +128,8 @@ object RootfsIntegrity {
         val missingExec = mutableListOf<String>()
         val missingShims = mutableListOf<String>()
 
-        for (name in listOf(BIN to "usr/bin", SBIN to "usr/sbin", LIB to "usr/lib", LIB64 to "usr/lib64")) {
+        // Required usr-merge links — present in every Ubuntu arm64 base image.
+        for (name in listOf(BIN to "usr/bin", SBIN to "usr/sbin", LIB to "usr/lib")) {
             val f = File(rootfs, name.first)
             val p = f.toPath()
             // Target existence resolves against the ROOTFS (the link target is
@@ -136,6 +152,32 @@ object RootfsIntegrity {
             }
         }
 
+        // /lib64 is OPTIONAL (see [LIB64]): absence is the correct arm64
+        // base-image layout; presence must be a healthy usr-merge symlink.
+        run {
+            val f = File(rootfs, LIB64)
+            val p = f.toPath()
+            val targetFile = File(rootfs, "usr/lib64")
+            val absent = !Files.isSymbolicLink(p) && !Files.exists(p)
+            rows += when {
+                absent ->
+                    Row("/" + LIB64, Row.Kind.SYMLINK, true,
+                        "not shipped by this arm64 base image (interpreter is /lib/ld-linux-aarch64.so.1)")
+                Files.isSymbolicLink(p) && targetFile.exists() ->
+                    Row("/" + LIB64, Row.Kind.SYMLINK, true, "→ usr/lib64")
+                Files.isSymbolicLink(p) ->
+                    Row("/" + LIB64, Row.Kind.SYMLINK, false, "dangling symlink (target usr/lib64 missing)").also { structural.add("/" + LIB64) }
+                f.isDirectory ->
+                    Row("/" + LIB64, Row.Kind.DIRECTORY, false, "real directory where a usr-merge symlink belongs").also { structural.add("/" + LIB64) }
+                f.isFile && f.length() == 0L ->
+                    Row("/" + LIB64, Row.Kind.FILE, false, "0-byte placeholder, expected symlink").also { structural.add("/" + LIB64) }
+                f.isFile ->
+                    Row("/" + LIB64, Row.Kind.FILE, false, "unexpected regular file, expected symlink").also { structural.add("/" + LIB64) }
+                else ->
+                    Row("/" + LIB64, Row.Kind.SYMLINK, false, "missing").also { structural.add("/" + LIB64) }
+            }
+        }
+
         for (spec in LOADER_LINKS) {
             val f = File(rootfs, spec.link)
             val realTarget = File(rootfs, spec.real)
@@ -152,8 +194,9 @@ object RootfsIntegrity {
             }
         }
 
-        // The hard interpreter path baked into arm64 ELFs: it must RESOLVE
-        // through whatever chain the base image shipped (/lib64 -> usr/lib64).
+        // The hard interpreter path baked into arm64 ELFs (PT_INTERP):
+        // /lib/ld-linux-aarch64.so.1 must RESOLVE through the usr-merge
+        // chain (/lib -> usr/lib -> the real multiarch loader).
         val interp = File(rootfs, ELF_INTERP)
         rows += when {
             interp.isFile && interp.length() > 0L ->

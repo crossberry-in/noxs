@@ -191,6 +191,14 @@ class NoxsInstaller(
                     val restored = RootfsIntegrity.restoreFromArchive(paths.rootfs, rootfsArchive, candidates)
                     progress.onLog("integrity restore from archive: $restored")
                 }
+                // Safe in-place repairs BEFORE any failure verdict: 0-byte
+                // placeholders at link paths, FHS/loader links, Noxs shims.
+                // The gate repairs first and only reports what it could not
+                // fix — "delete the environment" is the last resort, not
+                // the first answer to a healable tree.
+                val repaired = runCatching { RootfsIntegrity.repair(paths.rootfs) }
+                    .getOrDefault(emptyList())
+                if (repaired.isNotEmpty()) progress.onLog("integrity repair: $repaired")
                 val after = RootfsIntegrity.verify(paths.rootfs)
                 val broken = after.structuralDamage + after.missingExecutables
                 if (broken.isNotEmpty()) {
@@ -681,8 +689,11 @@ class NoxsInstaller(
         fixlink /lib usr/lib
         if [ -e usr/lib64 ]; then fixlink /lib64 usr/lib64; fi
         # aarch64 ELF interpreter chain — the classic silent-ENOENT source.
-        # Ubuntu usr-merge layout: /lib64 -> usr/lib64, and the interpreter
-        # inside usr/lib64 points back with ../lib/aarch64-linux-gnu/...
+        # arm64 truth (verified against the base tarball): every ELF hard-codes
+        # PT_INTERP = /lib/ld-linux-aarch64.so.1, which resolves through the
+        # /lib usr-merge link to usr/lib/... and the real multiarch loader.
+        # Genuine arm64 images ship NO /lib64; the usr/lib64 branches below
+        # only run on images that do.
         if [ -f /usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1 ]; then
             fixlink /usr/lib/ld-linux-aarch64.so.1 aarch64-linux-gnu/ld-linux-aarch64.so.1
             if [ -e usr/lib64 ]; then
