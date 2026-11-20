@@ -90,6 +90,16 @@ Maintenance:
   nx cert-fix                          Repair APT + CA certificates; install
                                        curl and wget into the environment
 
+Docker diagnostics (real probes — never fake status):
+  nx docker doctor [--json]            Full diagnostic: rootfs integrity, CLI,
+                                       daemon, DNS, registry, kernel limits,
+                                       storage driver, BuildKit, architecture
+  nx docker status                     Quick summary (daemon, storage, mode)
+  nx docker repair [--check]           Dry-run repair report; without --check
+                                       applies safe rootfs repairs after
+                                       confirmation — never touches Docker
+                                       storage, images or containers
+
 All noxs commands are also allowed here (nx <command> == noxs <command>):
   nx docker install | nx code start | nx storage status | nx help
 
@@ -251,6 +261,15 @@ case "${1:-}" in
         # shellcheck source=/dev/null
         . "$NX_LIB_DIR/ai-lib.sh"
         nx_ai_cmd "$@"
+        ;;
+    docker)
+        shift                       # drop "docker", forward the subcommand
+        # Docker diagnostics: doctor/status/repair run here (real probes,
+        # honest limitation wording); the daemon lifecycle stays owned by
+        # the noxs CLI and is forwarded untouched for parity.
+        # shellcheck source=/dev/null
+        . "$NX_LIB_DIR/docker-lib.sh"
+        nx_docker_cmd "$@"
         ;;
     cert-fix)
         shift                       # drop "cert-fix"

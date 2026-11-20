@@ -177,6 +177,34 @@ class NoxsInstaller(
                 progress.onLog("offline packages verified: nano curl git python3 pip gcc g++ make nodejs sqlite3")
             }
 
+            // 6b — structural integrity gate (RootfsIntegrity): catches partial
+            // extractions and 0-byte symlink placeholders BEFORE the environment
+            // is declared installed. A rootfs whose loader chain or required
+            // executables are broken would otherwise fail later with bare
+            // "No such file or directory" for /usr/bin/clear, sudo, docker…
+            checkCancelled()
+            val integrity = RootfsIntegrity.verify(paths.rootfs)
+            if (!integrity.healthy) {
+                // One targeted restore pass from the verified archive itself.
+                val candidates = integrity.missingExecutables
+                if (candidates.isNotEmpty()) {
+                    val restored = RootfsIntegrity.restoreFromArchive(paths.rootfs, rootfsArchive, candidates)
+                    progress.onLog("integrity restore from archive: $restored")
+                }
+                val after = RootfsIntegrity.verify(paths.rootfs)
+                val broken = after.structuralDamage + after.missingExecutables
+                if (broken.isNotEmpty()) {
+                    throw java.io.IOException(
+                        "Rootfs extraction is incomplete (integrity gate): $broken. " +
+                            "Delete the environment and reinstall — the download itself verified OK, " +
+                            "so this points at interrupted extraction or storage faults."
+                    )
+                }
+                progress.onLog("rootfs integrity verified (${after.rows.size} checks)")
+            } else {
+                progress.onLog("rootfs integrity verified (${integrity.rows.size} checks)")
+            }
+
             // 7 — userspace configuration. APT remains on signed HTTP only
             // during the CA-certificate bootstrap; final HTTPS is enabled later.
             checkCancelled()
@@ -633,11 +661,36 @@ class NoxsInstaller(
     private val FHS_LINKS_SCRIPT = """
         #!/bin/sh
         # Recreate FHS compatibility symlinks inside the Noxs sandbox.
-        [ -e /bin ] || ln -s usr/bin /bin
-        [ -e /sbin ] || ln -s usr/sbin /sbin
-        [ -e /lib ] || ln -s usr/lib /lib
-        [ -e /lib64 ] || ln -s usr/lib64 /lib64 2>/dev/null
-        [ -e /var/run ] || ln -s /run /var/run
+        # A previous extraction bug could leave 0-byte placeholder FILES at
+        # symlink paths; `[ -e ... ]` treats those as existing, which is why
+        # the old checks silently kept them and every ELF resolving through
+        # the path failed with ENOENT. Only symlinks count as healthy now:
+        # placeholders are removed (never real directories or non-empty files).
+        fixlink() {
+            p="${'$'}1" t="${'$'}2"
+            if [ -L "${'$'}p" ] && [ -e "${'$'}p" ]; then return 0; fi
+            if [ -d "${'$'}p" ] && [ ! -L "${'$'}p" ]; then return 0; fi   # real dir — keep
+            if [ -e "${'$'}p" ] || [ -L "${'$'}p" ]; then
+                [ -f "${'$'}p" ] && [ -s "${'$'}p" ] && return 0           # real file with content — keep
+                rm -f "${'$'}p" 2>/dev/null || return 0
+            fi
+            ln -s "${'$'}t" "${'$'}p" 2>/dev/null || true
+        }
+        fixlink /bin usr/bin
+        fixlink /sbin usr/sbin
+        fixlink /lib usr/lib
+        if [ -e usr/lib64 ]; then fixlink /lib64 usr/lib64; fi
+        # aarch64 ELF interpreter chain — the classic silent-ENOENT source.
+        # Ubuntu usr-merge layout: /lib64 -> usr/lib64, and the interpreter
+        # inside usr/lib64 points back with ../lib/aarch64-linux-gnu/...
+        if [ -f /usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1 ]; then
+            fixlink /usr/lib/ld-linux-aarch64.so.1 aarch64-linux-gnu/ld-linux-aarch64.so.1
+            if [ -e usr/lib64 ]; then
+                fixlink /usr/lib64/ld-linux-aarch64.so.1 ../lib/aarch64-linux-gnu/ld-linux-aarch64.so.1
+            fi
+        fi
+        fixlink /usr/bin/sh dash
+        fixlink /var/run /run
         exit 0
     """.trimIndent()
 }

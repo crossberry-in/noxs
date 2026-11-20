@@ -1673,6 +1673,7 @@ Description:
 
 Syntax:
   noxs docker install | start | stop | restart | status | info | test
+  nx docker doctor [--json] | status | repair [--check]
 
 Arguments: see Syntax    Options: none
 
@@ -1680,16 +1681,22 @@ Examples:
   noxs docker install
   noxs docker start
   noxs docker test
+  nx docker doctor --json
 
 Expected output:
   status prints daemon state, storage, networking and container support.
   test runs hello-world and records the real result.
+  'nx docker doctor' runs the full diagnostic: rootfs integrity, daemon,
+  DNS, registry, kernel limits, storage driver, BuildKit, architecture.
 
 Common errors:
   "Docker is not installed"          -> run: noxs docker install
   "Container execution: unsupported" -> kernel limitation of proot sandboxes
+  /usr/bin/clear|sudo|docker: No such file or directory
+                                     -> run: nx docker repair --check, and
+                                     Diagnostics -> Rootfs repair in the app
 
-Related: noxs status
+Related: noxs status, nx pkg doctor
 Documentation: https://crossberry-in.github.io/nxos-docs/devtools/workflows/
 HELP
             ;;

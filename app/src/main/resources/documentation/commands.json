@@ -8,11 +8,18 @@
       "category": "general",
       "description": "Command reference; detailed page per topic (storage, device, code, pkg, plug, cert-fix, ai, docs, ...).",
       "usage": "noxs help [topic]",
-      "arguments": ["topic (optional)"],
+      "arguments": [
+        "topic (optional)"
+      ],
       "options": [],
-      "examples": ["noxs help", "noxs help storage"],
+      "examples": [
+        "noxs help",
+        "noxs help storage"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "getting-started/quick-start/"
     },
     {
@@ -22,9 +29,13 @@
       "usage": "noxs version",
       "arguments": [],
       "options": [],
-      "examples": ["noxs version"],
+      "examples": [
+        "noxs version"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "changelog/"
     },
     {
@@ -34,9 +45,13 @@
       "usage": "noxs info",
       "arguments": [],
       "options": [],
-      "examples": ["noxs info"],
+      "examples": [
+        "noxs info"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "getting-started/quick-start/"
     },
     {
@@ -46,9 +61,13 @@
       "usage": "noxs status",
       "arguments": [],
       "options": [],
-      "examples": ["noxs status"],
+      "examples": [
+        "noxs status"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "troubleshooting/certificate-errors/"
     },
     {
@@ -58,9 +77,13 @@
       "usage": "noxs update",
       "arguments": [],
       "options": [],
-      "examples": ["noxs update"],
+      "examples": [
+        "noxs update"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "environments/linux-package-management/"
     },
     {
@@ -68,11 +91,17 @@
       "category": "general",
       "description": "Ubuntu-specific identity and repository report (primary Noxs distribution).",
       "usage": "noxs ubuntu status",
-      "arguments": ["status (default)"],
+      "arguments": [
+        "status (default)"
+      ],
       "options": [],
-      "examples": ["noxs ubuntu status"],
+      "examples": [
+        "noxs ubuntu status"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "environments/ubuntu-configuration/"
     },
     {
@@ -80,11 +109,18 @@
       "category": "documentation",
       "description": "Open the matching nxos-docs page in the Android browser and print the URL (offline-friendly fallback).",
       "usage": "noxs docs [topic]",
-      "arguments": ["topic (optional; ai, android, api, kali, packages, plug, security, storage, troubleshooting, ubuntu, ...)"],
+      "arguments": [
+        "topic (optional; ai, android, api, kali, packages, plug, security, storage, troubleshooting, ubuntu, ...)"
+      ],
       "options": [],
-      "examples": ["noxs docs storage", "noxs docs kali"],
+      "examples": [
+        "noxs docs storage",
+        "noxs docs kali"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "getting-started/introduction/"
     },
     {
@@ -92,11 +128,23 @@
       "category": "storage",
       "description": "SAF-backed Android storage access: status, per-category mapping, file operations, optional direct mount.",
       "usage": "noxs storage status|setup|map|repair|reset|ls|mkdir|cat|get|put|rm|cp|mv|permission|grant|revoke|mount|unmount|list",
-      "arguments": ["category (shared, downloads, dcim, pictures, music, movies, documents)", "relative-path", "local-file"],
-      "options": ["grant --direct (Android all-files-access screen for the /sdcard mount)"],
-      "examples": ["noxs storage status", "noxs storage get downloads report.pdf ~/report.pdf", "noxs storage grant --direct"],
+      "arguments": [
+        "category (shared, downloads, dcim, pictures, music, movies, documents)",
+        "relative-path",
+        "local-file"
+      ],
+      "options": [
+        "grant --direct (Android all-files-access screen for the /sdcard mount)"
+      ],
+      "examples": [
+        "noxs storage status",
+        "noxs storage get downloads report.pdf ~/report.pdf",
+        "noxs storage grant --direct"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "files/storage-access/"
     },
     {
@@ -106,9 +154,13 @@
       "usage": "noxs-setup-storage",
       "arguments": [],
       "options": [],
-      "examples": ["noxs-setup-storage"],
+      "examples": [
+        "noxs-setup-storage"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "files/storage-access/"
     },
     {
@@ -118,21 +170,36 @@
       "usage": "noxs files",
       "arguments": [],
       "options": [],
-      "examples": ["noxs files"],
+      "examples": [
+        "noxs files"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "files/file-browser/"
     },
     {
       "name": "noxs document",
       "category": "files",
-      "description": "Android document transfers: open, import, export, gallery, picker — every pick shows Android's own UI.",
+      "description": "Android document transfers: open, import, export, gallery, picker \u2014 every pick shows Android's own UI.",
       "usage": "noxs document open|import [dir] [--type MIME]|export <file> [name] [mime]|gallery [dest]|picker [dest]",
-      "arguments": ["dir", "file", "dest-file"],
-      "options": ["import --type MIME"],
-      "examples": ["noxs document import", "noxs document export ~/report.pdf"],
+      "arguments": [
+        "dir",
+        "file",
+        "dest-file"
+      ],
+      "options": [
+        "import --type MIME"
+      ],
+      "examples": [
+        "noxs document import",
+        "noxs document export ~/report.pdf"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "android/file-picker/"
     },
     {
@@ -140,11 +207,21 @@
       "category": "files",
       "description": "Send a file or text through the Android Sharesheet.",
       "usage": "noxs share <file> | noxs share -t <text>",
-      "arguments": ["file", "text"],
-      "options": ["-t (share text)"],
-      "examples": ["noxs share ~/report.pdf", "noxs share -t hello"],
+      "arguments": [
+        "file",
+        "text"
+      ],
+      "options": [
+        "-t (share text)"
+      ],
+      "examples": [
+        "noxs share ~/report.pdf",
+        "noxs share -t hello"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "files/file-operations/"
     },
     {
@@ -152,11 +229,17 @@
       "category": "android-integration",
       "description": "Take one photo through the camera flow (runtime grant requested first).",
       "usage": "noxs camera [dest-file]",
-      "arguments": ["dest-file (default under Pictures)"],
+      "arguments": [
+        "dest-file (default under Pictures)"
+      ],
       "options": [],
-      "examples": ["noxs camera"],
+      "examples": [
+        "noxs camera"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "android/gallery/"
     },
     {
@@ -164,11 +247,18 @@
       "category": "android-integration",
       "description": "SMS through the system SMS app (composer intent). Noxs holds NO SMS permission; the user presses send.",
       "usage": "noxs sms status|send <number> <message...>|compose <number> <message...>|contacts",
-      "arguments": ["number", "message"],
+      "arguments": [
+        "number",
+        "message"
+      ],
       "options": [],
-      "examples": ["noxs sms compose +15551234567 hello"],
+      "examples": [
+        "noxs sms compose +15551234567 hello"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "android/overview/"
     },
     {
@@ -176,11 +266,18 @@
       "category": "android-integration",
       "description": "Post Android notifications (POST_NOTIFICATIONS runtime grant on Android 13+).",
       "usage": "noxs notification status|permission|post <title> [body...]",
-      "arguments": ["title", "body"],
+      "arguments": [
+        "title",
+        "body"
+      ],
       "options": [],
-      "examples": ["noxs notification post build done"],
+      "examples": [
+        "noxs notification post build done"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "android/notifications/"
     },
     {
@@ -188,11 +285,18 @@
       "category": "android-integration",
       "description": "Non-identifying Android device reports.",
       "usage": "noxs device info|battery|storage",
-      "arguments": ["info|battery|storage"],
+      "arguments": [
+        "info|battery|storage"
+      ],
       "options": [],
-      "examples": ["noxs device info", "noxs device storage"],
+      "examples": [
+        "noxs device info",
+        "noxs device storage"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "android/overview/"
     },
     {
@@ -200,11 +304,17 @@
       "category": "android-integration",
       "description": "Read/write the Android clipboard (foreground-app rule applies to reads).",
       "usage": "noxs clipboard get|set <text>",
-      "arguments": ["text"],
+      "arguments": [
+        "text"
+      ],
       "options": [],
-      "examples": ["noxs clipboard set hello"],
+      "examples": [
+        "noxs clipboard set hello"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "terminal/customization/"
     },
     {
@@ -214,9 +324,13 @@
       "usage": "noxs network status",
       "arguments": [],
       "options": [],
-      "examples": ["noxs network status"],
+      "examples": [
+        "noxs network status"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "troubleshooting/network-errors/"
     },
     {
@@ -224,11 +338,20 @@
       "category": "development",
       "description": "code-server (VS Code in the browser) lifecycle; local-only 127.0.0.1:8080.",
       "usage": "noxs code install|start|stop|restart|status [--json]|logs",
-      "arguments": ["install|start|stop|restart|status|logs"],
-      "options": ["status --json"],
-      "examples": ["noxs code install", "noxs code status"],
+      "arguments": [
+        "install|start|stop|restart|status|logs"
+      ],
+      "options": [
+        "status --json"
+      ],
+      "examples": [
+        "noxs code install",
+        "noxs code status"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "devtools/code-server/"
     },
     {
@@ -236,11 +359,18 @@
       "category": "development",
       "description": "Docker daemon inside proot. Container execution is kernel-dependent: 'noxs docker test' reports the real result.",
       "usage": "noxs docker install|start|stop|restart|status|info|test",
-      "arguments": ["install|start|stop|restart|status|info|test"],
+      "arguments": [
+        "install|start|stop|restart|status|info|test"
+      ],
       "options": [],
-      "examples": ["noxs docker install", "noxs docker test"],
+      "examples": [
+        "noxs docker install",
+        "noxs docker test"
+      ],
       "implementation_status": "experimental",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "devtools/workflows/"
     },
     {
@@ -248,11 +378,23 @@
       "category": "package-management",
       "description": "NX package system: init from language templates, build, release, deploy, search, install, update, list, remove, doctor.",
       "usage": "nx pkg init <name> [--node|--rust|--cpp|--python|--go] | build | release | deploy | info <name> | search <name> | install <name> | update [--full] | list | remove <name> | doctor",
-      "arguments": ["package-name", "language template flag"],
-      "options": ["update --full", "search --json", "install -y"],
-      "examples": ["nx pkg init my-tool --python", "nx pkg install curl"],
+      "arguments": [
+        "package-name",
+        "language template flag"
+      ],
+      "options": [
+        "update --full",
+        "search --json",
+        "install -y"
+      ],
+      "examples": [
+        "nx pkg init my-tool --python",
+        "nx pkg install curl"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "packages/package-manager/"
     },
     {
@@ -260,11 +402,23 @@
       "category": "package-management",
       "description": "Create a new package project from a language template (node, rust, cpp, python, go).",
       "usage": "nx pkg init <name> [--node|--rust|--cpp|--python|--go]",
-      "arguments": ["name"],
-      "options": ["--node", "--rust", "--cpp", "--python", "--go"],
-      "examples": ["nx pkg init my-tool --python"],
+      "arguments": [
+        "name"
+      ],
+      "options": [
+        "--node",
+        "--rust",
+        "--cpp",
+        "--python",
+        "--go"
+      ],
+      "examples": [
+        "nx pkg init my-tool --python"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "packages/package-init/"
     },
     {
@@ -272,11 +426,19 @@
       "category": "package-management",
       "description": "Install official packages (noxs-pkg org) or GitHub packages (-git @user/repo) with sha256-checked releases.",
       "usage": "nx install <name>[@version] | nx install -git @user/repo[@version]",
-      "arguments": ["name[@version]", "-git @user/repo[@version]"],
+      "arguments": [
+        "name[@version]",
+        "-git @user/repo[@version]"
+      ],
       "options": [],
-      "examples": ["nx install curl", "nx install -git @user/repo"],
+      "examples": [
+        "nx install curl",
+        "nx install -git @user/repo"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "packages/package-install/"
     },
     {
@@ -284,11 +446,18 @@
       "category": "package-management",
       "description": "List installed packages, show details, update, remove (Ubuntu + Noxs packages).",
       "usage": "nx list | nx info <package> | nx update [package] | nx remove <package>",
-      "arguments": ["package"],
+      "arguments": [
+        "package"
+      ],
       "options": [],
-      "examples": ["nx list", "nx remove curl"],
+      "examples": [
+        "nx list",
+        "nx remove curl"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "packages/package-updates/"
     },
     {
@@ -298,9 +467,13 @@
       "usage": "nx cert-fix",
       "arguments": [],
       "options": [],
-      "examples": ["nx cert-fix"],
+      "examples": [
+        "nx cert-fix"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "troubleshooting/certificate-errors/"
     },
     {
@@ -308,11 +481,19 @@
       "category": "plugins",
       "description": "Noxs Plugin Store: open UI, search, install, update, uninstall, enable, disable. Plugins run under manifest permission boundaries.",
       "usage": "nx plug [search <query>|list|info <id>|install <id>|update <id>|uninstall <id>|enable <id>|disable <id>]",
-      "arguments": ["plugin id", "query"],
+      "arguments": [
+        "plugin id",
+        "query"
+      ],
       "options": [],
-      "examples": ["nx plug", "nx plug search editor"],
+      "examples": [
+        "nx plug",
+        "nx plug search editor"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "plugins/plugin-sdk/"
     },
     {
@@ -320,11 +501,18 @@
       "category": "ai",
       "description": "Noxs AI Agent Terminal (interactive nx@ai> session or one-shot task). API keys stay in user configuration and are never printed.",
       "usage": "nx ai [task]",
-      "arguments": ["task"],
+      "arguments": [
+        "task"
+      ],
       "options": [],
-      "examples": ["nx ai", "nx ai \"summarize package.json\""],
+      "examples": [
+        "nx ai",
+        "nx ai \"summarize package.json\""
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "ai/nx-ai/"
     },
     {
@@ -332,11 +520,18 @@
       "category": "network",
       "description": "Tor over PRoot (VPN mode): install/activate/stop/status/test; on|off routes new shells through Tor.",
       "usage": "nx vpn [install|stop|status|test|on|off]",
-      "arguments": ["subcommand"],
+      "arguments": [
+        "subcommand"
+      ],
       "options": [],
-      "examples": ["nx vpn status", "nx vpn on"],
+      "examples": [
+        "nx vpn status",
+        "nx vpn on"
+      ],
       "implementation_status": "experimental",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "troubleshooting/network-errors/"
     },
     {
@@ -344,11 +539,17 @@
       "category": "web",
       "description": "Open a URL in the Noxs floating browser window (WebView, URL guard enforced).",
       "usage": "nx ow <url>",
-      "arguments": ["url"],
+      "arguments": [
+        "url"
+      ],
       "options": [],
-      "examples": ["nx ow https://example.com"],
+      "examples": [
+        "nx ow https://example.com"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "terminal/terminal-interface/"
     },
     {
@@ -358,9 +559,13 @@
       "usage": "nx git | nx whoami",
       "arguments": [],
       "options": [],
-      "examples": ["nx whoami"],
+      "examples": [
+        "nx whoami"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "terminal/terminal-interface/"
     },
     {
@@ -368,12 +573,74 @@
       "category": "system",
       "description": "Guest helper scripts: guest service control, unix-socket checks, process listing.",
       "usage": "noxs-service start|stop|restart|status [service] | noxs-socket list|test <path> | noxs-ps",
-      "arguments": ["service", "path"],
+      "arguments": [
+        "service",
+        "path"
+      ],
       "options": [],
-      "examples": ["noxs-socket list"],
+      "examples": [
+        "noxs-socket list"
+      ],
       "implementation_status": "implemented",
-      "platform_support": ["ubuntu"],
+      "platform_support": [
+        "ubuntu"
+      ],
       "documentation_route": "architecture/unix-sockets/"
+    },
+    {
+      "name": "nx docker doctor",
+      "category": "development",
+      "description": "Full Docker diagnostic for the proot sandbox: rootfs integrity, CLI, daemon, DNS, registry, kernel limits, storage driver, BuildKit and architecture. Real probes only; --json emits one machine-readable object.",
+      "usage": "nx docker doctor [--json]",
+      "arguments": [
+        "--json"
+      ],
+      "options": [],
+      "examples": [
+        "nx docker doctor",
+        "nx docker doctor --json"
+      ],
+      "implementation_status": "experimental",
+      "platform_support": [
+        "ubuntu"
+      ],
+      "documentation_route": "devtools/workflows/"
+    },
+    {
+      "name": "nx docker status",
+      "category": "development",
+      "description": "Quick Docker summary (daemon, storage driver, Noxs mode, container support, DNS, BuildKit). Exit code 3 when stopped or not installed.",
+      "usage": "nx docker status",
+      "arguments": [],
+      "options": [],
+      "examples": [
+        "nx docker status"
+      ],
+      "implementation_status": "experimental",
+      "platform_support": [
+        "ubuntu"
+      ],
+      "documentation_route": "devtools/workflows/"
+    },
+    {
+      "name": "nx docker repair",
+      "category": "development",
+      "description": "Safe rootfs repair: restores FHS/loader links, dpkg state and missing system executables after explicit confirmation. --check is a dry run. Docker storage, images and containers are never touched.",
+      "usage": "nx docker repair [--check] [--yes]",
+      "arguments": [
+        "--check",
+        "--yes"
+      ],
+      "options": [],
+      "examples": [
+        "nx docker repair --check",
+        "nx docker repair --yes"
+      ],
+      "implementation_status": "experimental",
+      "platform_support": [
+        "ubuntu"
+      ],
+      "documentation_route": "devtools/workflows/"
     }
   ]
 }

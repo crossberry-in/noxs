@@ -54,7 +54,11 @@ class NoxsSessionManager(
         if (!paths.isInstalled()) {
             return Result.failure(IllegalStateException("Noxs Linux environment is not set up"))
         }
+        // Rootfs health runs before every session. A failure must never be
+        // silent: the historical swallow here let a broken configure() step
+        // leave /usr/local/bin/sudo missing with no trace in the log ring.
         runCatching { RootfsConfigurator.ensureHealthyRootfs(paths) }
+            .onFailure { NoxsLog.w("SessionManager", "rootfs health pass failed: ${it.message}") }
 
         sessionSeq++
         val name = label.ifBlank { if (loginAsRoot) "root-$sessionSeq" else "shell-$sessionSeq" }

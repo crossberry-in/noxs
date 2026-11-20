@@ -191,6 +191,7 @@ object RootfsConfigurator {
             "vpn-lib.sh" to NoxsNxVpnLib.VPN_LIB,
             "plug-lib.sh" to NoxsNxPlugLib.PLUG_LIB,
             "cert-fix.sh" to NoxsNxCertFix.CERT_FIX_LIB,
+            "docker-lib.sh" to NoxsDockerDoctorLib.DOCKER_LIB,
             "ai-lib.sh" to NoxsNxAiLib.AI_LIB
         ).forEach { (name, content) ->
             val f = File(libDir, name)
@@ -515,42 +516,73 @@ object RootfsConfigurator {
     }
 
     /**
-     * Repairs an existing rootfs if an earlier version extracted 0-byte placeholder
-     * files instead of real symbolic links, then refreshes configuration.
+     * Repairs an existing rootfs before a session starts, then refreshes
+     * configuration.
+     *
+     * Repair strategy (integrity-driven, RootfsIntegrity is the authority):
+     *  - STRUCTURAL damage (0-byte symlink placeholders, broken FHS/loader
+     *    links) comes from interrupted extractions — re-run the extraction
+     *    pass over the cached base archive to fix the whole tree at once.
+     *  - MISSING system executables (e.g. /usr/bin/clear) are restored by
+     *    extracting ONLY those members from the cache — never a full
+     *    re-extract over a live rootfs, which would reset the dpkg database
+     *    underneath user-installed packages (the historical cause of the
+     *    "docker vanished" reports).
+     *  - MISSING Noxs shims (/usr/local/bin/sudo, /usr/bin/su) are restored
+     *    after configure() unconditionally — a configure() step that aborted
+     *    before installSuAndSudo must never leave the sandbox without sudo.
      */
     fun ensureHealthyRootfs(paths: NoxsPaths) {
         val rootfs = paths.rootfs
         if (!rootfs.isDirectory) return
-        val binFile = File(rootfs, "bin")
-        val shFile = File(rootfs, "usr/bin/sh")
-        val ldAarch64 = File(rootfs, "usr/lib/ld-linux-aarch64.so.1")
-        val needsRepair = (!Files.isSymbolicLink(binFile.toPath()) && binFile.isFile) ||
-            (shFile.exists() && !Files.isSymbolicLink(shFile.toPath()) && shFile.length() == 0L) ||
-            (ldAarch64.exists() && !Files.isSymbolicLink(ldAarch64.toPath()) && ldAarch64.length() == 0L)
-
-        if (needsRepair) {
-            NoxsLog.i("RootfsConfig", "Detected broken 0-byte symlink placeholders in rootfs; repairing...")
-            // Remove 0-byte top-level files that block directory/symlink creation
-            listOf("bin", "sbin", "lib", "lib64").forEach { name ->
-                val f = File(rootfs, name)
-                if (!Files.isSymbolicLink(f.toPath()) && f.isFile && f.length() == 0L) {
-                    f.delete()
-                }
-            }
+        val report = RootfsIntegrity.verify(rootfs)
+        if (!report.healthy) {
+            NoxsLog.i(
+                "RootfsConfig",
+                "Rootfs integrity: ${report.structuralDamage.size} structural, " +
+                    "${report.missingExecutables.size} missing executables, " +
+                    "${report.missingShims.size} missing shims"
+            )
             val cachedArchive = paths.cache.listFiles()?.firstOrNull {
                 it.isFile && it.name.startsWith("rootfs-") && it.length() > 1_000_000L
             }
-            if (cachedArchive != null) {
-                runCatching {
-                    val stats = RootfsExtractor(rootfs).extract(cachedArchive)
-                    NoxsLog.i("RootfsConfig", "Re-extracted rootfs from cache (links=${stats.links})")
-                }.onFailure { e ->
-                    NoxsLog.w("RootfsConfig", "Cache re-extract failed: ${e.message}; running in-place symlink repair")
+            if (report.structuralDamage.isNotEmpty()) {
+                if (cachedArchive != null) {
+                    runCatching {
+                        val stats = RootfsExtractor(rootfs).extract(cachedArchive)
+                        NoxsLog.i("RootfsConfig", "Re-extracted rootfs from cache (links=${stats.links})")
+                    }.onFailure { e ->
+                        NoxsLog.w("RootfsConfig", "Cache re-extract failed: ${e.message}; running in-place symlink repair")
+                    }
+                }
+                repairZeroByteSymlinks(rootfs)
+            }
+            val stillMissing = RootfsIntegrity.verify(rootfs).missingExecutables
+            if (stillMissing.isNotEmpty() && cachedArchive != null) {
+                val restored = RootfsIntegrity.restoreFromArchive(rootfs, cachedArchive, stillMissing)
+                if (restored.isNotEmpty()) {
+                    NoxsLog.i("RootfsConfig", "Restored system executables from cache: $restored")
+                }
+                val unrestored = stillMissing.filter { it !in restored }
+                if (unrestored.isNotEmpty()) {
+                    NoxsLog.w(
+                        "RootfsConfig",
+                        "Still missing after repair: $unrestored — restore with apt " +
+                            "(e.g. nx cert-fix, or apt-get install --reinstall <package>)"
+                    )
                 }
             }
-            repairZeroByteSymlinks(rootfs)
         }
         configure(paths)
+        // configure() ends with installSuAndSudo; if any earlier step aborted,
+        // the shims would be skipped — verify and restore them directly so
+        // /usr/local/bin/sudo can never stay missing after a session starts.
+        val missingShims = RootfsIntegrity.verify(rootfs).missingShims
+        if (missingShims.isNotEmpty()) {
+            runCatching { installNoxsSuSudo(rootfs) }
+                .onSuccess { NoxsLog.i("RootfsConfig", "Restored missing Noxs shims: $missingShims") }
+                .onFailure { e -> NoxsLog.w("RootfsConfig", "Shim restore failed: ${e.message}") }
+        }
     }
 
     private fun ensureSymlink(link: File, target: String) {
@@ -563,14 +595,11 @@ object RootfsConfigurator {
     }
 
     private fun repairZeroByteSymlinks(rootfs: File) {
-        ensureSymlink(File(rootfs, "bin"), "usr/bin")
-        ensureSymlink(File(rootfs, "sbin"), "usr/sbin")
-        ensureSymlink(File(rootfs, "lib"), "usr/lib")
-        ensureSymlink(File(rootfs, "usr/bin/sh"), "dash")
-        ensureSymlink(File(rootfs, "usr/bin/awk"), "mawk")
-        if (File(rootfs, "usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1").isFile) {
-            ensureSymlink(File(rootfs, "usr/lib/ld-linux-aarch64.so.1"), "aarch64-linux-gnu/ld-linux-aarch64.so.1")
-        }
+        // The full safe-repair set now lives in RootfsIntegrity.repair (FHS
+        // links incl. /lib64, /usr/bin/sh + awk, the complete aarch64 loader
+        // chain, su/sudo shims) — kept in one place so the session-start
+        // repair, the diagnostics UI and the guest-side doctor agree.
+        RootfsIntegrity.repair(rootfs)
         // Repair 0-byte shared library SONAME placeholders (e.g. libtinfo.so.6 -> libtinfo.so.6.4)
         val usrLib = File(rootfs, "usr/lib")
         if (usrLib.isDirectory) {

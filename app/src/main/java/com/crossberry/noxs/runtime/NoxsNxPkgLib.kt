@@ -188,6 +188,15 @@ tar_members() {
 # install boundary: absolute paths, `..` traversal, or absolute symlink
 # targets. Extraction itself happens at / so relative members stay inside
 # the environment root.
+#
+# PROTECTED SYSTEM PATHS: members under bin/, sbin/, usr/bin/, usr/sbin/,
+# lib/, lib64/, usr/lib/, usr/lib64/ are refused. A package extracted at /
+# would otherwise silently OVERWRITE Ubuntu system executables and loader
+# files (the reported "No such file or directory" corruption for
+# /usr/bin/clear, /usr/local/bin/sudo, /usr/bin/docker), and a later
+# `nx remove` would DELETE them with no restore. Locally-installed software
+# belongs in /usr/local (FHS) — that is also where every official Noxs
+# package installs.
 check_tarball_members() {
     local member path target list unsafe=0
     list=$(tar_members "§1") || die "Package archive is unreadable."
@@ -197,12 +206,16 @@ check_tarball_members() {
         case "§path" in
             /*) err "Package archive contains an absolute path: §path"; unsafe=1 ;;
             *..*) err "Package archive contains an unsafe path: §path"; unsafe=1 ;;
+            bin/*|sbin/*|usr/bin/*|usr/sbin/*|lib/*|lib64/*|usr/lib/*|usr/lib64/*)
+                err "Package archive touches a protected system path: §path — packages install under usr/local/ or opt/"; unsafe=1 ;;
         esac
         case "§member" in
             *" -> "*)
                 target="§{member#* -> }"
                 case "§target" in
                     /*) err "Package archive contains an absolute symlink: §member"; unsafe=1 ;;
+                    bin/*|sbin/*|usr/bin/*|usr/sbin/*|lib/*|lib64/*|usr/lib/*|usr/lib64/*)
+                        err "Package archive symlink targets a protected system path: §member"; unsafe=1 ;;
                 esac
                 ;;
         esac

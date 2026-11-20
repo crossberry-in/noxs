@@ -284,7 +284,13 @@ pkg_remove_cmd() {
         [ -n "§f" ] || continue
         case "§f" in
             /*|*..*) err "Manifest contains an unsafe path: §f"; unsafe=1 ;;
-            usr/*|opt/*) : ;;
+            # Package scope: usr/local/** and opt/** ONLY. System executable
+            # and library directories (usr/bin, bin, usr/lib, …) are protected:
+            # removing a package that overwrote a system binary must never
+            # delete the real Ubuntu file with no restore path.
+            usr/local/*|opt/*) : ;;
+            bin/*|sbin/*|usr/bin/*|usr/sbin/*|lib/*|lib64/*|usr/lib/*|usr/lib64/*|usr/*)
+                err "Manifest touches a protected system path (packages install under usr/local/ or opt/): §f"; unsafe=1 ;;
             *) err "Manifest contains a path outside the package scope: §f"; unsafe=1 ;;
         esac
     done <<< "§files"

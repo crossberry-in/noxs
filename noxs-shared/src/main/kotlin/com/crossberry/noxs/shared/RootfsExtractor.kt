@@ -74,11 +74,18 @@ class RootfsExtractor(private val root: File) {
      * [onProgress] receives the real cumulative entry count while extraction
      * runs; [beforeEntry] is invoked before every entry so callers can
      * abort cooperatively (e.g. user-initiated setup cancellation).
+     *
+     * [onlyPaths] restricts extraction to a fixed set of archive members
+     * (relative paths, no trailing slash) — used by the integrity repair to
+     * restore individual missing system files from the cached base archive
+     * WITHOUT re-extracting over a live rootfs. Members outside the set are
+     * skipped (their payload is drained so the tar stream stays aligned).
      */
     fun extract(
         archive: File,
         onProgress: (Long) -> Unit = {},
-        beforeEntry: (() -> Unit)? = null
+        beforeEntry: (() -> Unit)? = null,
+        onlyPaths: Set<String>? = null
     ): ExtractedStats {
         RootfsLinkQueue.drain()
         root.mkdirs()
@@ -94,13 +101,29 @@ class RootfsExtractor(private val root: File) {
         tarStream.use { stream ->
             TarReader(stream).readAll { entry, payload ->
                 beforeEntry?.invoke()
-                handleEntry(entry, payload)
+                if (onlyPaths == null || wanted(entry.name, onlyPaths)) {
+                    handleEntry(entry, payload)
+                } else {
+                    // keep the stream aligned: drop this entry's payload
+                    payload.copyTo(NullOutputStream)
+                }
                 seen++
                 if (seen % 32L == 0L) onProgress(seen)
             }
         }
         onProgress(seen)
         return ExtractedStats(files, dirs, links, bytes)
+    }
+
+    /** Archive member names arrive as "./usr/bin/clear" — compare against both forms. */
+    private fun wanted(entryName: String, onlyPaths: Set<String>): Boolean {
+        val normalized = entryName.removePrefix("./").trimEnd('/')
+        return normalized in onlyPaths
+    }
+
+    private object NullOutputStream : java.io.OutputStream() {
+        override fun write(b: Int) {}
+        override fun write(b: ByteArray, off: Int, len: Int) {}
     }
 
     private var files = 0
@@ -156,8 +179,13 @@ class RootfsExtractor(private val root: File) {
                         m.invoke(null, entry.linkName, link.absolutePath)
                         true
                     }.getOrDefault(false)
-                    if (!createdViaOs && !link.createNewFile() && !link.exists()) {
-                        throw IOException("Cannot create symlink: ${entry.name}", e)
+                    if (!createdViaOs) {
+                        // NEVER leave a 0-byte placeholder file at a symlink path:
+                        // it poisons `[ -e ... ]` checks in-shell (noxs-links.sh
+                        // treated the placeholder as existing) and makes every exec
+                        // resolving through the path fail with ENOENT. The entry
+                        // stays queued for the next extraction pass; post-extract
+                        // integrity verification catches anything still missing.
                     }
                 }
                 RootfsLinkQueue.enqueue(link.absolutePath, entry.linkName)

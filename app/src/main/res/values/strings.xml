@@ -192,8 +192,49 @@
 
     <!-- Diagnostics -->
     <string name="title_diagnostics">Diagnostics (developer)</string>
-    <string name="diag_copy">Copy logs</string>
+    <string name="diag_copy">Copy report</string>
     <string name="diag_clear">Clear</string>
+    <string name="diag_status_ok">OK</string>
+    <string name="diag_status_limited">Limited (expected Android restriction)</string>
+    <string name="diag_status_fail">Failed</string>
+    <string name="diag_status_unknown">Unknown — no probe data</string>
+    <string name="diag_section_rootfs">Root filesystem</string>
+    <string name="diag_section_docker">Docker (inside proot)</string>
+    <string name="diag_section_kernel">Kernel &amp; device capabilities</string>
+    <string name="diag_section_actions">Actions</string>
+    <string name="diag_card_rootfs">RootFS integrity</string>
+    <string name="diag_rootfs_ok">verified</string>
+    <string name="diag_rootfs_issues">%1$d issue(s) found</string>
+    <string name="diag_rootfs_detail_ok">%1$d structural checks passed — system executables and loader links are intact</string>
+    <string name="diag_action_rootfs_repair">Rootfs repair</string>
+    <string name="diag_repair_nothing">Nothing needed repair.</string>
+    <string name="diag_card_docker">Docker diagnostics</string>
+    <string name="diag_card_kernel">Kernel &amp; device</string>
+    <string name="diag_docker_probe_unavailable">probe unavailable</string>
+    <string name="diag_docker_running">daemon running</string>
+    <string name="diag_docker_stopped">daemon stopped</string>
+    <string name="diag_docker_not_installed">not installed</string>
+    <string name="diag_row_rootfs">Rootfs executables &amp; loader</string>
+    <string name="diag_row_cli">Docker CLI</string>
+    <string name="diag_row_daemon">Docker daemon</string>
+    <string name="diag_row_mode">Noxs mode: %1$s</string>
+    <string name="diag_row_dns">DNS resolution</string>
+    <string name="diag_row_registry">Docker registry</string>
+    <string name="diag_row_storage">Storage driver</string>
+    <string name="diag_row_buildkit">BuildKit / buildx</string>
+    <string name="diag_row_kernel">Kernel capabilities</string>
+    <string name="diag_row_arch">Architecture: %1$s</string>
+    <string name="diag_value_from_doctor">via doctor</string>
+    <string name="diag_value_unknown">unknown</string>
+    <string name="diag_buildkit_classic">classic builder only</string>
+    <string name="diag_kernel_limited">Android/proot restrictions apply</string>
+    <string name="diag_action_repair_check">Repair check</string>
+    <string name="diag_action_repair_apply">Apply guest repairs</string>
+    <string name="diag_repair_confirm">Safe guest repairs only: FHS/loader links, dpkg state, missing system executables via apt. Docker storage, images and containers are NEVER touched. Apply now?</string>
+    <string name="diag_repair_confirm_apply">Apply</string>
+    <string name="diag_repair_exit">Exit code: %1$d</string>
+    <string name="diag_repair_probe_failed">Repair could not run: %1$s</string>
+    <string name="diag_privacy_note">The report contains capability facts and log lines only — never credentials.</string>
 
     <!-- About -->
     <string name="title_about">About Noxs</string>

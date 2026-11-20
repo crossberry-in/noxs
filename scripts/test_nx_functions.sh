@@ -36,6 +36,7 @@ for name, content, mirror in extract_nx.nx_shell_scripts(root):
               'VPN_LIB': 'noxs-pkg/vpn-lib.sh',
               'PLUG_LIB': 'noxs-pkg/plug-lib.sh',
               'CERT_FIX_LIB': 'noxs-pkg/cert-fix.sh',
+              'DOCKER_LIB': 'noxs-pkg/docker-lib.sh',
               'PKG_UI': 'noxs-pkg/pkg-ui.sh',
               'PKG_MANAGER': 'noxs-pkg/pkg-manager.sh',
               'AI_LIB': 'noxs-pkg/ai-lib.sh',

@@ -134,6 +134,12 @@ if [ "$MODE" = "--all" ] || [ "$MODE" = "--code" ]; then
     fi
 fi
 
+# ---- docker diagnostics CLI ----------------------------------------------
+if [ "$MODE" = "--all" ] || [ "$MODE" = "--docker" ]; then
+    step "docker doctor/status/repair CLI tests (sandboxed)"
+    bash scripts/test-docker-cli.sh || fail "docker CLI tests"
+fi
+
 echo
 if [ "$RC" -eq 0 ]; then
     echo "[noxs] all validations passed ✔"
